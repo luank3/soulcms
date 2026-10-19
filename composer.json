@@ -1,0 +1,49 @@
+{
+    "name": "soulcms/soulcms",
+    "description": "SoulCMS - a fast, modern, multi-database PHP content management system with a SketchCMS-compatible database schema.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": ["cms", "framework", "hmvc", "sqlite", "mysql", "mariadb", "postgresql", "performance"],
+    "require": {
+        "php": ">=8.2",
+        "ext-pdo": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*"
+    },
+    "suggest": {
+        "ext-pdo_sqlite": "Required for the SQLite driver",
+        "ext-pdo_mysql": "Required for the MySQL / MariaDB driver",
+        "ext-pdo_pgsql": "Required for the PostgreSQL driver",
+        "ext-gd": "Required for image processing (captcha, thumbnails)",
+        "ext-zlib": "Required for response compression",
+        "ext-brotli": "Required for Brotli response compression"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SoulCMS\\": "src/",
+            "SoulCMS\\App\\": "app/"
+        },
+        "files": [
+            "src/Support/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SoulCMS\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "scripts": {
+        "serve": "php -S 0.0.0.0:8000 -t public public/index.php",
+        "test": "phpunit"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

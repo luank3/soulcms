@@ -1,0 +1,144 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * SoulCMS micro benchmark.
+ *
+ * Measures the hot paths of a request: route matching and full request
+ * handling (routing + controller + view). The route benchmark compares the
+ * indexed router with the naive "one regular expression per route" approach
+ * that most small frameworks use.
+ */
+
+declare(strict_types=1);
+
+use SoulCMS\Foundation\Application;
+use SoulCMS\Http\Request;
+use SoulCMS\Http\Uri;
+use SoulCMS\Routing\Route;
+use SoulCMS\Routing\RouteCollection;
+use SoulCMS\Routing\Router;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$iterations = (int) ($argv[1] ?? 20000);
+
+function formatDuration(float $seconds): string
+{
+    return number_format($seconds, 4, '.', '') . ' s';
+}
+
+function report(string $label, float $seconds, int $iterations): void
+{
+    printf(
+        "%-42s %8.4f s   %8.2f ms/1k   %10.0f req/s\n",
+        $label,
+        $seconds,
+        ($seconds / $iterations) * 1000 * 1000,
+        $iterations / max($seconds, 0.000001)
+    );
+}
+
+/* -------------------------------------------------------------------------
+ | Route matching: indexed router vs. one regex per route
+ | ---------------------------------------------------------------------- */
+
+$patterns = [
+    '/', '/robots.txt', '/sitemap.xml', '/faq/terms', '/faq/about', '/faq/help',
+    '/search', '/articles', '/articles/category', '/articles/post',
+    '/articles/{categorySlug:[a-zA-Z0-9\-_]+}/post',
+    '/articles/post-{id:[0-9]+}/upload',
+    '/articles/post-{id:[0-9]+}/add-chap',
+    '/articles/{action:post|chapter}-{id:[0-9]+}/edit',
+    '/articles/{action:post|chapter}-{id:[0-9]+}/delete',
+    '/articles/{postSlug:[a-zA-Z0-9\-_]+}.html',
+    '/articles/{postSlug:[a-zA-Z0-9\-_]+}',
+    '/tag/{tagSlug:[a-zA-Z0-9\-_]+}',
+    '/view-chap/{chapterSlug:[a-zA-Z0-9\-_]+}',
+    '/view-file/{id:[0-9]+}',
+    '/mail', '/mail/send/{receiver:[a-zA-Z0-9\-_]+}', '/mail/system',
+    '/manager', '/manager/users', '/manager/articles', '/manager/modules',
+    '/shoutbox', '/shoutbox/count', '/shoutbox/list', '/shoutbox/send',
+    '/register', '/login', '/logout', '/users', '/user/{account:[a-zA-Z0-9\-_]+}',
+];
+
+$paths = [
+    '/', '/articles/12-hello-world.html', '/articles/my-slug', '/tag/php',
+    '/manager/users', '/user/admin', '/login', '/faq/terms', '/articles/post-7/upload',
+    '/view-file/42', '/shoutbox/send', '/mail/send/admin', '/nope',
+];
+
+$router = new Router();
+
+foreach ($patterns as $pattern) {
+    $router->add($pattern, static fn (): string => 'handler', 'GET|POST');
+}
+
+$router->freeze();
+
+// Naive baseline: one regular expression per route, evaluated in order.
+$naive = [];
+
+foreach ($patterns as $pattern) {
+    $compiled = \SoulCMS\Routing\RouteCompiler::compile($pattern);
+    $naive[] = $compiled['regex'];
+}
+
+$start = microtime(true);
+
+for ($i = 0; $i < $iterations; ++$i) {
+    $path = $paths[$i % count($paths)];
+
+    foreach ($naive as $regex) {
+        if (preg_match($regex, $path)) {
+            break;
+        }
+    }
+}
+
+$naiveDuration = microtime(true) - $start;
+
+$start = microtime(true);
+
+for ($i = 0; $i < $iterations; ++$i) {
+    $path = $paths[$i % count($paths)];
+    $router->getCollection()->match('GET', $path);
+}
+
+$indexedDuration = microtime(true) - $start;
+
+echo PHP_EOL . "Route matching (" . count($paths) . " paths, " . $iterations . " iterations)" . PHP_EOL;
+report('Naive: one regex per route', $naiveDuration, $iterations);
+report('SoulCMS: indexed collection', $indexedDuration, $iterations);
+printf("%-42s %8.2fx faster\n\n", 'Speed-up', $naiveDuration / max($indexedDuration, 0.000001));
+
+/* -------------------------------------------------------------------------
+ | Full request handling
+ | ---------------------------------------------------------------------- */
+
+$application = Application::create(dirname(__DIR__));
+
+$requests = [
+    new Request('GET', new Uri('http://localhost', 'localhost', null, '/', '', ''), [], [], [], [], [], ['REMOTE_ADDR' => '127.0.0.1']),
+    new Request('GET', new Uri('http://localhost', 'localhost', null, '/articles', '', ''), [], [], [], [], [], ['REMOTE_ADDR' => '127.0.0.1']),
+    new Request('GET', new Uri('http://localhost', 'localhost', null, '/users', '', ''), [], [], [], [], [], ['REMOTE_ADDR' => '127.0.0.1']),
+    new Request('GET', new Uri('http://localhost', 'localhost', null, '/login', '', ''), [], [], [], [], [], ['REMOTE_ADDR' => '127.0.0.1']),
+];
+
+$start = microtime(true);
+
+for ($i = 0; $i < $iterations; ++$i) {
+    $application->handle($requests[$i % count($requests)]);
+}
+
+$requestDuration = microtime(true) - $start;
+
+echo "Full request handling (boot + route + controller + view)" . PHP_EOL;
+report('Request lifecycle', $requestDuration, $iterations);
+
+printf(
+    "%-42s %8.2f ms/request (boot included)%s",
+    'Average latency',
+    ($requestDuration / $iterations) * 1000,
+    PHP_EOL
+);

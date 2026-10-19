@@ -1,0 +1,130 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <title>SoulCMS — front-end behaviour</title>
+</head>
+<body data-drawer="closed" data-search="closed">
+
+<button id="theme" data-theme-toggle>
+    <svg width="18" height="18" aria-hidden="true"><use href="/assets/img/icons.svg#i-sun"></use></svg>
+    <span data-theme-label></span>
+</button>
+<button id="drawer" data-drawer-toggle aria-controls="drawer-nav" aria-expanded="false"></button>
+<button id="drawer-scrim" data-drawer-scrim hidden aria-label="Đóng menu"></button>
+<aside id="drawer-nav" aria-label="Điều hướng chính" aria-hidden="true" inert>
+    <button id="drawer-close" type="button" data-drawer-close>Đóng menu</button>
+    <a id="drawer-link" href="#">Diễn đàn</a>
+</aside>
+<button id="search" data-search-toggle aria-controls="search-form" aria-expanded="false"></button>
+<form id="search-form" class="topbar__search--collapsible"><input type="search"></form>
+<button id="menu-btn" data-menu-toggle aria-controls="m" aria-expanded="false"></button>
+<div id="m" data-menu hidden><a href="#">item</a></div>
+<div data-toasts></div>
+<form id="cf" data-confirm="sure?"><button type="submit">x</button></form>
+
+<pre id="out"></pre>
+
+<script src="../../public/assets/js/soulcms.js"></script>
+<script>
+/*
+ * The assertions run after DOMContentLoaded so that the application has
+ * already attached its listeners.
+ *
+ * Run it with:
+ *   google-chrome --headless --disable-gpu --no-sandbox --dump-dom \
+ *       file://$PWD/tests/js/behaviour.html | grep -E "PASS|FAIL"
+ */
+window.addEventListener('DOMContentLoaded', function () {
+    var results = [];
+
+    function check(name, ok, extra) {
+        results.push((ok ? 'PASS' : 'FAIL') + ' ' + name + (extra !== undefined ? ' :: ' + extra : ''));
+    }
+
+    /* Theme ---------------------------------------------------------------- */
+
+    document.getElementById('theme').click();
+    check('theme toggles to light', document.documentElement.getAttribute('data-theme') === 'light');
+    check('theme label updates', document.querySelector('[data-theme-label]').textContent === 'Chế độ tối');
+    document.getElementById('theme').click();
+    check('theme toggles back to dark', document.documentElement.getAttribute('data-theme') === 'dark');
+
+    /* The icon sprite is an external file: the theme button may only swap the
+       fragment, never the path, or the icon disappears. */
+    var use = document.querySelector('[data-theme-toggle] use');
+    if (use) {
+        var href = use.getAttribute('href') || '';
+        check('theme icon keeps the sprite path', href.indexOf('#') > 0 && href.split('#')[0] !== '', href);
+        document.getElementById('theme').click();
+        var after = document.querySelector('[data-theme-toggle] use').getAttribute('href');
+        // Switching to the light theme shows the moon (the target theme).
+        check('theme icon swaps the fragment only', after.split('#')[0] === href.split('#')[0] && after.indexOf('i-moon') > -1, after);
+        document.getElementById('theme').click();
+    } else {
+        check('theme icon keeps the sprite path', false, 'no <use> element');
+    }
+
+    /* Drawer --------------------------------------------------------------- */
+
+    var drawer = document.getElementById('drawer');
+    var drawerNav = document.getElementById('drawer-nav');
+    var drawerScrim = document.getElementById('drawer-scrim');
+
+    check('mobile drawer starts outside keyboard navigation', drawerNav.inert && drawerNav.getAttribute('aria-hidden') === 'true');
+
+    drawer.click();
+    check('drawer opens', document.body.getAttribute('data-drawer') === 'open');
+    check('drawer announces expanded state', drawer.getAttribute('aria-expanded') === 'true');
+    check('drawer scrim becomes available', !drawerScrim.hidden);
+    check('open drawer becomes available to assistive tech', !drawerNav.inert && drawerNav.getAttribute('aria-hidden') === 'false');
+    check('focus moves into drawer', document.activeElement === document.getElementById('drawer-close'));
+
+    document.getElementById('drawer-link').focus();
+    drawerNav.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    check('drawer keeps keyboard focus inside', document.activeElement === document.getElementById('drawer-close'));
+
+    drawerScrim.click();
+    check('scrim closes drawer', document.body.getAttribute('data-drawer') === 'closed');
+    check('closed drawer cannot receive keyboard focus', drawerNav.inert && drawerNav.getAttribute('aria-hidden') === 'true');
+    check('focus returns to drawer toggle', document.activeElement === drawer);
+
+    drawer.click();
+    document.getElementById('drawer-close').click();
+    check('close control dismisses drawer', document.body.getAttribute('data-drawer') === 'closed');
+
+    drawer.click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    check('Escape dismisses drawer', document.body.getAttribute('data-drawer') === 'closed');
+    check('Escape restores focus to drawer toggle', document.activeElement === drawer);
+
+    /* Search --------------------------------------------------------------- */
+
+    var search = document.getElementById('search');
+    search.click();
+    check('search opens', document.body.getAttribute('data-search') === 'open');
+    check('search announces expanded state', search.getAttribute('aria-expanded') === 'true');
+    check('focus moves to search field', document.activeElement === document.querySelector('#search-form input'));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    check('Escape closes search', document.body.getAttribute('data-search') === 'closed');
+    check('search focus returns to toggle', document.activeElement === search);
+
+    /* Menu ----------------------------------------------------------------- */
+
+    document.getElementById('menu-btn').click();
+    check('menu opens', !document.getElementById('m').hidden);
+    check('menu aria expanded', document.getElementById('menu-btn').getAttribute('aria-expanded') === 'true');
+    document.getElementById('menu-btn').click();
+    check('menu closes', document.getElementById('m').hidden);
+
+    /* Toasts --------------------------------------------------------------- */
+
+    window.soulToast('Xin chào', 'success');
+    check('toast renders', document.querySelectorAll('.toast').length === 1);
+    check('toast has the right type', document.querySelector('.toast').className.indexOf('toast--success') > -1);
+
+    document.getElementById('out').textContent = results.join('\n');
+});
+</script>
+</body>
+</html>

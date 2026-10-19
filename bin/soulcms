@@ -1,0 +1,259 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * SoulCMS command line interface.
+ *
+ * Usage: php bin/soulcms <command> [options]
+ */
+
+declare(strict_types=1);
+
+use SoulCMS\Database\Connection;
+use SoulCMS\Database\Installer;
+use SoulCMS\Foundation\Application;
+use SoulCMS\Foundation\Config;
+use SoulCMS\Foundation\Paths;
+use SoulCMS\Routing\RouteCache;
+use SoulCMS\Routing\Router;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+$argv = $_SERVER['argv'] ?? [];
+$command = $argv[1] ?? 'help';
+$options = parseOptions(array_slice($argv, 2));
+
+$application = Application::create(dirname(__DIR__));
+$container = $application->container();
+
+/** @var Config $config */
+$config = $container->get('config');
+
+function parseOptions(array $arguments): array
+{
+    $options = [];
+
+    foreach ($arguments as $argument) {
+        if (!str_starts_with($argument, '--')) {
+            continue;
+        }
+
+        $argument = substr($argument, 2);
+
+        if (str_contains($argument, '=')) {
+            [$key, $value] = explode('=', $argument, 2);
+            $options[$key] = $value;
+
+            continue;
+        }
+
+        $options[$argument] = true;
+    }
+
+    return $options;
+}
+
+function out(string $message): void
+{
+    fwrite(STDOUT, $message . PHP_EOL);
+}
+
+function error(string $message): void
+{
+    fwrite(STDERR, $message . PHP_EOL);
+}
+
+switch ($command) {
+    case 'install':
+    case 'migrate':
+        $drop = isset($options['force']);
+
+        try {
+            /** @var Connection $connection */
+            $connection = $container->get('db');
+            $installer = new Installer($connection);
+
+            $created = $installer->install($drop);
+
+            if ($created === []) {
+                out('Schema already present, nothing to do.');
+            } else {
+                out(sprintf('Created %d table(s): %s', count($created), implode(', ', $created)));
+            }
+
+            $nick = (string) ($options['admin'] ?? 'admin');
+            $password = (string) ($options['password'] ?? 'admin12345');
+            $email = (string) ($options['email'] ?? 'admin@localhost');
+
+            $exists = $connection->selectOne('SELECT `id` FROM `users` WHERE `nick` = ? LIMIT 1', [$nick]);
+
+            if ($exists === null) {
+                $userId = $connection->insert('users', [
+                    'nick' => $nick,
+                    'name' => $nick,
+                    'email' => $email,
+                    'pass' => password_hash($password, PASSWORD_BCRYPT),
+                    'level' => 127,
+                    'reg' => time(),
+                    'avatar' => '15',
+                    'cover' => '8',
+                ]);
+
+                $connection->insert('users_waifu', ['user_id' => $userId]);
+
+                out(sprintf('Administrator "%s" created (id %d).', $nick, $userId));
+            } else {
+                out(sprintf('Administrator "%s" already exists.', $nick));
+            }
+
+            buildRouteCache($container, $config);
+        } catch (Throwable $exception) {
+            error('Installation failed: ' . $exception->getMessage());
+
+            exit(1);
+        }
+
+        break;
+
+    case 'db:seed':
+        try {
+            /** @var Connection $connection */
+            $connection = $container->get('db');
+
+            $seed = require Paths::database('seed.php');
+            [$posts, $comments, $members] = $seed($connection, isset($options['force']));
+
+            if ($posts === 0) {
+                out('The database already contains content. Use --force to seed anyway.');
+            } else {
+                out(sprintf('Seeded %d posts, %d comments and %d members.', $posts, $comments, $members));
+            }
+        } catch (Throwable $exception) {
+            error('Seeding failed: ' . $exception->getMessage());
+
+            exit(1);
+        }
+
+        break;
+
+    case 'db:verify':
+        try {
+            /** @var Connection $connection */
+            $connection = $container->get('db');
+            $problems = (new Installer($connection))->verify();
+
+            if ($problems === []) {
+                out('The database schema matches the expected definition.');
+            } else {
+                foreach ($problems as $problem) {
+                    error(' - ' . $problem);
+                }
+
+                exit(1);
+            }
+        } catch (Throwable $exception) {
+            error('Verification failed: ' . $exception->getMessage());
+
+            exit(1);
+        }
+
+        break;
+
+    case 'routes:list':
+        /** @var Router $router */
+        $router = $container->get('router');
+
+        foreach ($router->getCollection()->all() as $route) {
+            out(sprintf(
+                '%-8s %-52s %s',
+                implode('|', $route->getMethods()),
+                $route->getPattern(),
+                $route->getName() ?? ''
+            ));
+        }
+
+        out(sprintf("\n%d route(s).", $router->getCollection()->count()));
+
+        break;
+
+    case 'routes:cache':
+        buildRouteCache($container, $config);
+        out('Route table cached.');
+
+        break;
+
+    case 'cache:clear':
+        $removed = 0;
+
+        foreach (glob(Paths::cache('views') . '/*.php') ?: [] as $file) {
+            if (@unlink($file)) {
+                ++$removed;
+            }
+        }
+
+        if (is_file(Paths::cache('routes.php'))) {
+            @unlink(Paths::cache('routes.php'));
+            ++$removed;
+        }
+
+        out(sprintf('Cleared %d cached file(s).', $removed));
+
+        break;
+
+    case 'serve':
+        $host = (string) ($options['host'] ?? '127.0.0.1');
+        $port = (string) ($options['port'] ?? '8000');
+        $docroot = Paths::join('public');
+
+        out(sprintf('SoulCMS is running on http://%s:%s', $host, $port));
+        passthru(sprintf('php -S %s:%s -t %s %s', escapeshellarg($host), escapeshellarg($port), escapeshellarg($docroot), escapeshellarg($docroot . '/index.php')));
+
+        break;
+
+    case 'help':
+    default:
+        out(<<<TXT
+        SoulCMS - command line interface
+
+        Commands:
+          install              Create the database schema and the administrator account
+          migrate              Apply the schema (idempotent)
+          db:verify            Compare the database with the expected schema
+          db:seed              Insert demo content (posts, members, chat)
+          routes:list          Print the routing table
+          routes:cache         Compile the routing table into the cache
+          cache:clear          Remove the compiled views and routes
+          serve                Start the PHP development server
+
+        Options:
+          --force              Drop the existing tables before installing
+          --admin=<nick>       Administrator nickname (default: admin)
+          --password=<pass>    Administrator password (default: admin12345)
+          --email=<email>      Administrator e-mail address
+          --host=<host>        Host for the "serve" command
+          --port=<port>        Port for the "serve" command
+
+        TXT);
+
+        break;
+}
+
+/**
+ * @param \SoulCMS\Foundation\Container $container
+ */
+function buildRouteCache(\SoulCMS\Foundation\Container $container, Config $config): void
+{
+    $router = new Router();
+    $cache = new RouteCache(Paths::cache('routes.php'), false);
+
+    require Paths::join('routes', 'web.php');
+    $router->freeze();
+
+    $sources = [Paths::join('routes', 'web.php')];
+
+    foreach (glob(Paths::modules('*') . '/Module.php') ?: [] as $file) {
+        $sources[] = $file;
+    }
+
+    $cache->save($router->getCollection(), $sources);
+}

@@ -1,0 +1,16 @@
+FROM php:8.2-apache
+
+ARG SKETCHCMS_COMMIT=91112320de73c1fec244b360e6fed74bdfbcf182
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git libfreetype6-dev libjpeg62-turbo-dev libonig-dev libpng-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j"$(nproc)" gd mbstring mysqli pdo_mysql \
+    && a2enmod rewrite \
+    && sed -ri 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf \
+    && git clone --depth 1 --branch v1 --single-branch https://github.com/pentanoic/2026_SketchCMS.git /tmp/sketchcms \
+    && test "$(git -C /tmp/sketchcms rev-parse HEAD)" = "$SKETCHCMS_COMMIT" \
+    && find /var/www/html -mindepth 1 -delete \
+    && cp -a /tmp/sketchcms/. /var/www/html/ \
+    && rm -rf /tmp/sketchcms /var/www/html/.git /var/lib/apt/lists/* \
+    && chown -R www-data:www-data /var/www/html

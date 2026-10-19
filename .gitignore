@@ -1,0 +1,14 @@
+/vendor/
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/*.sqlite
+/storage/settings.json
+/.env
+/.env.*
+!/.env.example
+!/.env.sketchcms-demo.example
+/config/local.php
+.phpunit.result.cache
+.DS_Store

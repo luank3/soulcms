@@ -1,0 +1,19 @@
+# Prefer setting the web document root to "public". This fallback exposes only
+# the public directory when shared hosting requires the project root as root.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Never serve application internals from the project root.
+    RewriteRule ^(app|src|config|database|storage|vendor|bin|tests)(/|$) - [F,L,NC]
+
+    # Requests already inside public are handled by public/.htaccess.
+    RewriteRule ^public(?:/|$) - [L]
+
+    # Dispatch all other requests through the public document root.
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+<FilesMatch "^(?:\.env(?:\..*)?|.*\.(?:lock|md))$">
+    Require all denied
+</FilesMatch>
