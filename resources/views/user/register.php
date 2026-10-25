@@ -3,20 +3,21 @@
 /**
  * @var array<string,string> $errors
  * @var array<string,mixed>  $old
+ * @var string               $captcha_question
  */
 
 ?>
 <div class="auth__card">
     <div class="auth__head">
-        <h1>Tạo tài khoản</h1>
-        <p>Tham gia diễn đàn chỉ mất vài giây.</p>
+        <h1><?= e(\SoulCMS\Support\Lang::get('auth.register.title')) ?></h1>
+        <p><?= e(\SoulCMS\Support\Lang::get('auth.register.intro')) ?></p>
     </div>
 
     <?php if ($errors !== []): ?>
         <div class="alert alert--error" role="alert">
             <?= icon('alert', '', 18) ?>
             <div>
-                <p class="alert__title">Cần sửa <?= e((string) count($errors)) ?> trường</p>
+                <p class="alert__title"><?= e(\SoulCMS\Support\Lang::get('auth.register.error_title', ['count' => count($errors)])) ?></p>
                 <ul>
                     <?php foreach ($errors as $message): ?>
                         <li><?= e($message) ?></li>
@@ -31,18 +32,18 @@
 
         <?= view('partials/field', [
             'name' => 'nick',
-            'label' => 'Tên đăng nhập',
+            'label' => \SoulCMS\Support\Lang::get('auth.register.identifier'),
             'type' => 'text',
             'value' => $old['nick'] ?? '',
             'errors' => $errors,
             'required' => true,
             'autofocus' => true,
-            'hint' => '3–32 ký tự: chữ, số, gạch ngang hoặc gạch dưới.',
+            'hint' => \SoulCMS\Support\Lang::get('auth.register.identifier_hint'),
         ]) ?>
 
         <?= view('partials/field', [
             'name' => 'email',
-            'label' => 'E-mail',
+            'label' => \SoulCMS\Support\Lang::get('auth.register.email'),
             'type' => 'email',
             'value' => $old['email'] ?? '',
             'errors' => $errors,
@@ -51,34 +52,39 @@
 
         <?= view('partials/field', [
             'name' => 'password',
-            'label' => 'Mật khẩu',
+            'label' => \SoulCMS\Support\Lang::get('auth.register.password'),
             'type' => 'password',
             'errors' => $errors,
             'required' => true,
-            'hint' => 'Tối thiểu 6 ký tự.',
+            'hint' => \SoulCMS\Support\Lang::get('auth.register.password_hint'),
         ]) ?>
 
         <?= view('partials/field', [
             'name' => 'password_confirm',
-            'label' => 'Xác nhận mật khẩu',
+            'label' => \SoulCMS\Support\Lang::get('auth.register.confirm_password'),
             'type' => 'password',
             'errors' => $errors,
             'required' => true,
         ]) ?>
 
         <div class="field">
-            <label for="sex">Giới tính</label>
+            <label for="sex"><?= e(\SoulCMS\Support\Lang::get('auth.register.sex')) ?></label>
             <select id="sex" name="sex">
-                <option value="boy">Nam</option>
-                <option value="girl">Nữ</option>
-                <option value="other">Khác</option>
+                <option value="boy"><?= e(\SoulCMS\Support\Lang::get('auth.register.male')) ?></option>
+                <option value="girl"><?= e(\SoulCMS\Support\Lang::get('auth.register.female')) ?></option>
+                <option value="other"><?= e(\SoulCMS\Support\Lang::get('auth.register.other')) ?></option>
             </select>
         </div>
 
-        <button class="btn btn--block" type="submit"><?= icon('user', '', 16) ?> Tạo tài khoản</button>
+        <div class="field">
+            <label for="captcha_answer"><?= e(\SoulCMS\Support\Lang::get('auth.register.captcha')) ?>: <?= e($captcha_question) ?></label>
+            <input id="captcha_answer" name="captcha_answer" type="number" inputmode="numeric" required autocomplete="off">
+        </div>
+
+        <button class="btn btn--block" type="submit"><?= icon('user', '', 16) ?> <?= e(\SoulCMS\Support\Lang::get('auth.register.submit')) ?></button>
     </form>
 
     <p class="auth__foot">
-        Đã có tài khoản? <a href="<?= e(url('/login')) ?>">Đăng nhập</a>
+        <?= e(\SoulCMS\Support\Lang::get('auth.register.have_account')) ?> <a href="<?= e(url('/login')) ?>"><?= e(\SoulCMS\Support\Lang::get('auth.login.title')) ?></a>
     </p>
 </div>

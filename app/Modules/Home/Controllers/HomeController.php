@@ -9,6 +9,7 @@ use SoulCMS\App\Modules\User\Repositories\UserRepository;
 use SoulCMS\Http\Controller;
 use SoulCMS\Http\Request;
 use SoulCMS\Http\Response;
+use SoulCMS\Support\Lang;
 
 /**
  * The public home controller.
@@ -151,18 +152,33 @@ final class HomeController extends Controller
         ]);
     }
 
+    public function staticPage(Request $request): Response
+    {
+        $page = $this->container->get(\SoulCMS\Support\StaticPageStore::class)->find((string) $this->param('slug', ''));
+        if ($page === null) {
+            return Response::html(Lang::get('error.404.title'), 404);
+        }
+
+        return $this->html('home/static_page', [
+            'page_title' => $page['title'],
+            'page_description' => $page['description'],
+            'page_keyword' => $page['keyword'],
+            'static_page' => $page,
+        ]);
+    }
+
     public function plugin(Request $request): Response
     {
         $plugin = (string) $this->param('plugin', '');
 
         if (!preg_match('/^[a-zA-Z0-9_\-]+$/', $plugin)) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         $view = 'plugin/' . $plugin;
 
         if (!$this->view->exists($view)) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         return $this->html($view);

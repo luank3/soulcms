@@ -13,7 +13,8 @@ built around that, not around a generic dashboard.
 * **The feed is the product.** Discussions are rendered as a dense, hairline
   ruled *dispatch feed* — a category gutter, a serif title, a monospace
   metadata strip and a column of counters — instead of a grid of identical
-  cards.
+  cards. Feed rows include a short plain-text excerpt; profiles also show a
+  display-only reputation rank derived from registration age and recent activity.
 * **Identity is data.** A member's role (Newbie → Legend, Contributor →
   Developer) is rendered with the role's own colour, so a reader recognises
   a trusted poster at a glance. The scale comes straight from the CMS level
@@ -108,8 +109,15 @@ The scale runs from `--step--1` (0.75rem) to `--step-4` (2.125rem).
   personal navigation and the secondary links.
 * The **feed** is the primary content surface. A 3px gutter painted with the
   category colour makes a section recognisable at a glance.
-* The **admin shell** replaces the rail with a grouped admin navigation and
-  renders figures as one strip rather than a grid of cards.
+* **Admin shell** replaces the rail with a grouped admin navigation and
+  renders figures as one strip rather than a grid of cards. Staff can create,
+  edit and delete article categories without changing the SketchCMS schema.
+* The **public rail** offers a Vietnamese/English preference that persists
+  without a session; common shell navigation, controls, authentication forms,
+  member-profile labels, profile-edit and blocklist forms, member directory,
+  private-mail inbox, system notifications, message-compose form, home-feed
+  controls and article listing follow the selection. Static pages are edited in
+  the admin area and render through the public shell with SEO fields.
 
 ### Responsive behaviour
 
@@ -161,6 +169,15 @@ available it adds:
 * confirmation before destructive actions (`data-confirm`);
 * incremental chat polling (`/shoutbox/list?after=<id>`), which only
   transfers new messages and pauses while the tab is hidden;
+* safe post rendering supports Markdown, a BBCode subset (including attributed
+  quotes and safe download links, formatting aliases, sub/superscript, collapsed safe spoiler disclosures, hex and allow-listed
+  named colors (including bold color), 8–72 px font sizes, text alignment,
+  basic Markdown ordered/unordered lists, Markdown blockquotes, horizontal rules, validated YouTube embeds,
+  Markdown headings/tables/strikethrough, fenced code, safe Markdown `[label](URL)` and automatic HTTP(S) links,
+  common emoticons (including confusion, surprise, neutral and crying faces) and allow-listed PHP/JavaScript/SQL syntax highlighting;
+  code blocks remain escaped;
+* profile pages render saved local waifu decorations; their owners can hide or
+  restore them without changing any decoration paths.
 * copy-to-clipboard on code blocks.
 
 The script is a single file with no dependencies and no build step.

@@ -64,32 +64,47 @@ Indexes do not change the data model, so they are safe to add:
 
 ## 2. Features present in SketchCMS but not in SoulCMS
 
-These are real gaps. The schema columns they need all exist, so each one can
-be implemented without a migration.
+### 2.1 Attachment storage — S3 design adaptation
 
-### 2.1 The media module — entirely missing
+The SketchCMS attachment upload uses Telegram/Cloudinary Workers. SoulCMS
+intentionally uses a private S3-compatible bucket instead: `S3Storage` signs
+server-side uploads and temporary downloads with AWS Signature Version 4 and
+adds no runtime SDK dependency. Set `STORAGE_DRIVER=s3`, `S3_ENDPOINT`,
+`S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY`; the endpoint
+must use HTTPS. `S3_PATH_STYLE=true` is the default for compatible providers.
+Uploads are content-validated. The existing `articles_file` schema is
+unchanged; `type='s3'` identifies these objects, whose keys derive from
+`articles/{post_id}/{file_id}.{extension}`. Downloads are presigned for five
+minutes and shown only for public/free files or to the post author/admins.
+`STORAGE_DRIVER=local` is the default. The adapter intentionally implements
+server-side PUT plus presigned GETs (not browser-direct uploads), and should use
+bucket credentials limited to object access in the configured bucket.
 
-| Upstream | Description |
-|---|---|
-| `/media/upload` | upload to Telegram or a Cloudflare Worker |
-| `/media/download/{file_id}/{file_name}` | download with a pretty filename |
-| `/media/library` | the shared media library |
-| `mediaModel::insertMedia` / `getLibrary` | storage of library entries |
+The upstream shared media library is now implemented as a member-scoped library
+at `/media/library`, backed by the existing `articles_file` table. It accepts
+validated uploads to the configured private S3 bucket, returns temporary
+presigned URLs, and lists only the current member's library objects. Library
+objects use `blogid=0` to stay separate from post attachments; no schema changes
+are required. The upstream Telegram/Cloudflare Worker backends are intentionally
+replaced by S3; their absence is a design choice, not an unfinished feature.
+The `/manager/media/config` screen for site-wide storage settings is still
+unimplemented; S3 is configured through environment variables.
 
-SoulCMS stores attachments in `articles_file` but has no media library, no
-remote upload and no download route. The `articles_file` columns
-(`type`, `status`, `price`, `saleoff`, `condition`, `mua`, `passphrase`) are
-therefore written but never interpreted.
+### 2.2 The paid-file system — implemented for S3 attachments
 
-### 2.2 The paid-file system — entirely missing
+`FileBuy` is supported for private, priced S3 attachments: a signed-in buyer's
+`users.xu` balance is charged once, and the buyer is recorded in the existing
+dot-separated `articles_file.mua` column. The download becomes available only
+after purchase; the file detail page also shows existing purchasers as profile links. Free/public files and the post author/admin keep their existing
+access rules. Upstream `saleoff` and `condition` pricing semantics are not yet
+implemented; purchases charge the stored `price`. Legacy local attachments are
+not offered for purchase.
 
-`FileBuy`, `FileBoughtCount`, `FilePurchaserList` and the `price` /
-`saleoff` / `condition` / `mua` columns have no implementation. SoulCMS
-uploads a file and shows it; it cannot sell one.
+### 2.3 The like system — implemented
 
-### 2.3 The like system — entirely missing
-
-`articles_post.like` and `PostLikeList` / `PostLikeSave` are not implemented.
+Members can like a post once; post authors cannot like their own post. Likes
+use the existing dot-separated `articles_post.like` field, and a successful
+like sends the author a system notification.
 
 ### 2.4 Mail — partially missing
 
@@ -97,10 +112,10 @@ uploads a file and shows it; it cannot sell one.
 |---|---|
 | `MailSend`, `MailDetailList`, `MailList`, `MailCount` | ✅ |
 | `MailSystemCount`, `MailSystemList` | ✅ |
-| `MailViewUpdate` (mark as read) | ❌ |
-| `LatestMailDetail` | ❌ |
-| `MailBlocked` (block a sender) | ❌ |
-| `MailSystemView`, `MailSystemClear` | ❌ |
+| `MailViewUpdate` (mark as read) | ✅ — opening a conversation marks its messages read |
+| `LatestMailDetail` | ✅ — inbox preview and unread state loaded for all conversations in one query |
+| `MailBlocked` (block a sender) | ✅ — a recipient's existing `users.blocklist` prevents the blocked member from opening or sending private messages |
+| `MailSystemView`, `MailSystemClear` | ✅ — opening system notifications marks them read; clear uses a POST-only action |
 
 ### 2.5 User module — partially missing
 
@@ -108,24 +123,24 @@ uploads a file and shows it; it cannot sell one.
 |---|---|
 | register, login, logout, forgot/reset password | ✅ |
 | `UserList`, `UserListOnline`, `UserDetailWithFields` | ✅ |
-| `UserDetailEdit` (profile editing) | ❌ — no `/user/{nick}/info` route |
-| `UserDetailBlockList` (`users.blocklist`) | ❌ — the column exists, unused |
-| `UserStats` (post + comment counts for a member) | ❌ |
-| `UserOnlineStatus` | ◐ — `users.on` is written, but no status query |
-| `CheckResetToken` | ◐ — the token is validated in the session only |
+| `UserDetailEdit` (profile editing) | ✅ — owner-only name, e-mail and gender updates at `/user/{nick}/info` |
+| `UserDetailBlockList` (`users.blocklist`) | ✅ — owner-managed, stored in the existing dot-separated column; blocked users cannot send private messages |
+| `UserStats` (post + comment counts for a member) | ✅ — profile counts include all authored posts and their comments |
+| `UserOnlineStatus` | ✅ — member profile shows status based on activity within the last five minutes |
+| `CheckResetToken` | ✅ — reset links are checked against `users.reset_token` and `reset_expires`, and consumed with the password update; e-mail delivery is still unavailable |
 
-### 2.6 Reputation system — not implemented
+### 2.6 Reputation system — display-only rank implemented
 
-`users.karma`, `karma_daily_time`, `karma_level`, `xu`, `tiemluc`,
-`sft_time`, `sft_level` are all present in the schema and all unused. The
-upstream ranks members by registration age and activity; SoulCMS shows the
-numbers but never computes them.
+SoulCMS derives a profile reputation rank from registration age and post/comment
+activity in the last 30 days. The score and label are display-only; no karma,
+level, currency, or other account columns are modified. The upstream daily karma
+and resource/energy progression remains unsupported.
 
-### 2.7 Login lockout — not implemented
+### 2.7 Login lockout — implemented
 
-`users.failed_logins` is incremented and `lock_time` is never read. The
-upstream locks an account after a configurable number of failures; SoulCMS
-relies on the rate limiter only.
+`failed_logins` and `lock_time` enforce the configured failed-login threshold and
+recovery window. A failed password attempt is counted once by `AuthManager`;
+the login controller only returns the generic failure response.
 
 ### 2.8 Admin panel — partially missing
 
@@ -135,51 +150,63 @@ relies on the rate limiter only.
 | `/manager/users` | ✅ |
 | `/manager/users/edit`, `/manager/users/ban` | ✅ |
 | `/manager/articles` | ✅ |
-| `/manager/articles/cat/add|edit|delete` | ◐ — add and delete only |
+| `/manager/articles/cat/add|edit|delete` | ◐ — add, edit and delete; full upstream bulk tools remain absent |
 | `/manager/articles/post/delete` | ✅ |
-| `/manager/articles/chapter/delete` | ❌ |
+| `/manager/articles/chapter/delete` | ✅ — POST-only, admin-guarded chapter deletion |
 | `/manager/url_rules` + add/edit/delete | ✅ (implemented during this review) |
 | `/manager/modules` | ◐ — enable/disable only |
 | `/manager/modules/add|upload|delete|install|uninstall|download` | ❌ — no module marketplace |
 | `/manager/modules/template/action` | ❌ — no per-module template switching |
-| `/manager/static_pages` + add/edit/delete | ❌ |
+| `/manager/static_pages` + add/edit/delete | ✅ — settings-backed page definitions; unchanged SketchCMS schema |
 | `/manager/templates` + set_default/download/view | ❌ — no theme manager |
-| `/manager/smtp` | ❌ |
+| `/manager/smtp` | ❌ — SMTP is configured through environment variables; manager UI remains missing |
 | `/manager/security` | ❌ |
-| `/manager/shoutbox/clean` | ❌ |
-| `/manager/media`, `/manager/media/config` | ❌ |
+| `/manager/shoutbox/clean` | ✅ — POST-only, admin-guarded action clears the chat table |
+| `/manager/media`, `/manager/media/config` | ◐ — member S3 library at `/media/library`; manager-wide storage configuration is via environment variables, with no manager screen |
 
 ### 2.9 Content rendering
 
 | Upstream | Status |
 |---|---|
-| `bbcode` (`[url]`, `[img]`, `[b]`, `[quote]`…) | ❌ — SoulCMS renders a small Markdown subset |
-| `smileys` | ❌ |
-| syntax highlighting (Highlight.php) | ❌ |
-| `PageDescription` / `PageKeyword` (SEO meta extraction) | ◐ — the post meta is stored but not extracted from the body |
-| `TrimContent` / `ContentLen` (excerpts) | ❌ |
+| `bbcode` (`[url]`, `[img]`, `[b]`, `[quote]`…) | ◐ — formatting and aliases, links including safe Markdown `[label](URL)` and formatted labels on safe `[url=URL]` links, automatic plain HTTP(S) URLs and safe `[d]` download links, images, quotes (including inline formatting and `[quote=name]` attribution), semantic `[sub]`/`[sup]` tags, collapsed escaped `[spoiler]` disclosures, hex and allow-listed named colors (including bold `[bcolor]`), bounded `[size]` spans (8–72 px), text alignment and basic Markdown ordered/unordered lists and inline formatting within BBCode list items and upstream numeric list-selector behavior, Markdown blockquotes, horizontal rules, validated YouTube embeds, Markdown headings, tables with inline-formatted cells, fenced code and strikethrough render safely alongside BBCode and common emoticons; advanced upstream tags remain unsupported |
+| `smileys` | ◐ — common text emoticons (including confusion, surprise, neutral and crying faces) convert to Unicode emoji; the full upstream smiley set/assets are not replicated |
+| syntax highlighting (Highlight.php) | ◐ — lightweight server-side highlighting for allow-listed PHP, JavaScript and SQL code blocks; upstream Highlight.php's full language/theme support is not replicated |
+| `PageDescription` / `PageKeyword` (SEO meta extraction) | ✅ — article pages extract `meta_title`, `meta_desc`, and `meta_keywords` from `meta_data`, falling back to title-derived keywords and a 150-character plain-text body description |
+| `TrimContent` / `ContentLen` (excerpts) | ✅ — post feeds show a 160-character plain-text excerpt with BBCode/Markdown formatting removed |
 
 ### 2.10 Platform features
 
 | Upstream | Status |
 |---|---|
-| CAPTCHA on registration | ❌ |
-| e-mail sending (PHPMailer) | ❌ — the reset token is stored in the session, never mailed |
-| SMTP configuration | ❌ |
-| language switcher | ❌ |
-| static pages (`templates/_assets/static-page`) | ❌ |
-| the "waifu" decorations | ◐ — the table and the row exist, there is no UI |
+| CAPTCHA on registration | ✅ — session-bound one-use arithmetic challenge; no third-party service |
+| e-mail sending (password reset) | ◐ — sends one-hour database-backed reset links over configured SMTP; no links are sent if mail is not configured |
+| SMTP configuration and password-reset email | ◐ — `MAIL_*` environment settings and a dependency-free SMTP sender deliver one-hour reset links; no manager SMTP screen |
+| language switcher | ◐ — visitors can persist Vietnamese/English selection in a same-site cookie; the document language, common public-shell navigation/control labels, login/registration forms, password-reset screens, member-profile labels, profile-edit and blocklist forms, member directory, private-mail inbox, system notifications, message-compose form, home-feed controls, article listing/detail, paid-file, search, chapter, tag and publishing interfaces, FAQ, shoutbox, media library, category management, static-page management, site settings, article and member administration, dashboard, shared errors, feed statistics, URL-rule manager and administration shell switch; the language names remain in their native form |
+| static pages (`templates/_assets/static-page`) | ✅ — admin-managed Markdown/BBCode pages render at `/{slug}.html`; settings-backed to preserve the schema |
+| the "waifu" decorations | ◐ — member profiles render the saved header/side image paths only when they resolve to local files under `public/images`; owners can hide/show decorations via the existing `close` column |
 | registration restricted by country (`Manager.allow_country`) | ❌ |
-| Telegram / Cloudinary Worker uploads | ❌ |
+| media upload/download routes | ✅ — authenticated S3 uploads, member-scoped library, and signed download redirects; S3 intentionally replaces the Telegram/Worker workaround |
+
+Role badges on member profiles and directory entries, relative timestamps, and
+pagination labels also use the selected Vietnamese or English catalogue,
+including administrator and moderation roles. Client-side theme and drawer
+labels and copy confirmations are localized through the same server-rendered
+catalogue. Controller-generated page titles, generic HTTP error responses, and
+shoutbox API errors use that catalogue as well. Registration CAPTCHA feedback,
+duplicate-account errors, login throttling, article, mail, and manager
+validation, and blocklist feedback are translated before reaching the member.
+Module titles and descriptions in the administration panel, generated system
+notifications for comments and likes, and media-upload and paid-file purchase
+API errors follow the selected language.
 
 ### 2.11 Routes
 
 | Upstream | Status |
 |---|---|
-| `/home`, `/index.html` (home aliases) | ❌ |
-| `/{slug}.html` (catch-all static page) | ❌ |
-| `/shoutbox/ele` (single chat element) | ❌ |
-| everything else in the upstream route table | ✅ |
+| `/home`, `/index.html` (home aliases) | ✅ — both resolve to the home feed |
+| `/{slug}.html` (catch-all static page) | ✅ — slug-constrained, settings-backed static pages |
+| `/shoutbox/ele` (single chat element) | ✅ — returns the requested chat row as a safely escaped HTML fragment |
+| `/media/upload`, `/media/download/{file_id}/{file_name}`, `/media/library` | ◐ — upload and member library provided via S3; download and manager settings are adapted rather than upstream-compatible |
 
 ---
 
@@ -212,11 +239,4 @@ relies on the rate limiter only.
 
 ## 5. Recommended order for closing the gaps
 
-1. **Media module** — the largest missing surface; the schema is ready.
-2. **Password-reset e-mail** — the current flow only works in the same
-   browser session, which is a functional bug for real users.
-3. **Profile editing** — members currently cannot change their own details.
-4. **Login lockout** — `failed_logins` and `lock_time` are already tracked.
-5. **BBCode** — upstream content will not render correctly without it.
-6. **The like system and the paid-file system** — both are single tables.
-7. **The remaining admin screens** — static pages, themes, SMTP, security.
+1. **Remaining admin screens and rendering details** — themes and SMTP/security admin UI, full smiley assets, complete BBCode tags, full syntax-highlighter language/theme parity, and paid-file `saleoff` / `condition` semantics.

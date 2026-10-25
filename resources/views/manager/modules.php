@@ -9,8 +9,8 @@
 <section class="panel">
     <div class="panel__head">
         <?= icon('layers', '', 16) ?>
-        <h2 class="panel__title">Module</h2>
-        <span class="panel__meta"><?= e((string) count($modules)) ?> module</span>
+        <h2 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('manager.modules.title')) ?></h2>
+        <span class="panel__meta"><?= e(\SoulCMS\Support\Lang::get('manager.modules.count', ['count' => (string) count($modules)])) ?></span>
     </div>
 
     <div class="panel__body panel__body--flush">
@@ -19,7 +19,7 @@
 
             <div class="tablewrap">
                 <table class="table">
-                    <thead><tr><th>Module</th><th>Phiên bản</th><th>Mô tả</th><th class="text-right">Bật</th></tr></thead>
+                    <thead><tr><th>Module</th><th><?= e(\SoulCMS\Support\Lang::get('manager.dashboard.version')) ?></th><th><?= e(\SoulCMS\Support\Lang::get('manager.modules.description')) ?></th><th class="text-right"><?= e(\SoulCMS\Support\Lang::get('manager.modules.enable')) ?></th></tr></thead>
                     <tbody>
                     <?php foreach ($modules as $name => $module): ?>
                         <tr>
@@ -29,7 +29,7 @@
                             <td class="text-right">
                                 <input type="checkbox" name="module_<?= e($name) ?>" value="1"
                                        <?= in_array($name, $enabled, true) ? 'checked' : '' ?>
-                                       aria-label="Bật module <?= e($name) ?>">
+                                       aria-label="<?= e(\SoulCMS\Support\Lang::get('manager.modules.enable_module', ['name' => $name])) ?>">
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -38,7 +38,7 @@
             </div>
 
             <div class="panel__body">
-                <button class="btn" type="submit"><?= icon('check', '', 15) ?> Lưu cấu hình</button>
+                <button class="btn" type="submit"><?= icon('check', '', 15) ?> <?= e(\SoulCMS\Support\Lang::get('manager.modules.save')) ?></button>
             </div>
         </form>
     </div>

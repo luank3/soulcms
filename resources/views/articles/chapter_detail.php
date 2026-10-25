@@ -19,7 +19,7 @@ $author = $author_detail ?? null;
                     </a>
                     <span>/</span>
                 <?php endif; ?>
-                <span>Chương</span>
+                <span><?= e(\SoulCMS\Support\Lang::get('articles.chapter.label')) ?></span>
             </p>
 
             <h1 style="margin:var(--s-2) 0 var(--s-3)"><?= e($chapter['title']) ?></h1>
@@ -39,7 +39,7 @@ $author = $author_detail ?? null;
     <section class="panel">
         <div class="panel__head">
             <?= icon('layers', '', 16) ?>
-            <h2 class="panel__title">Các chương khác</h2>
+            <h2 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('articles.chapter.other')) ?></h2>
         </div>
         <div class="panel__body panel__body--flush">
             <div class="feed">

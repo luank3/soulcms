@@ -68,6 +68,9 @@ final class Csp
         ];
 
         foreach ($this->extra as $directive => $sources) {
+            if (array_diff($sources, ["'none'"]) !== []) {
+                $directives[$directive] = array_values(array_diff($directives[$directive] ?? [], ["'none'"]));
+            }
             $directives[$directive] = array_merge($directives[$directive] ?? [], $sources);
         }
 

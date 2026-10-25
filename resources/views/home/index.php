@@ -15,6 +15,8 @@
  * @var string     $sort
  */
 
+use SoulCMS\Support\Lang;
+
 $canPost = auth()->check();
 
 ?>
@@ -33,8 +35,8 @@ $canPost = auth()->check();
         <section class="panel">
             <div class="panel__head">
                 <?= icon('anchor', '', 16) ?>
-                <h2 class="panel__title">Bài ghim</h2>
-                <span class="panel__meta"><?= e((string) count($sticked)) ?> bài</span>
+                <h2 class="panel__title"><?= e(Lang::get('home.pinned')) ?></h2>
+                <span class="panel__meta"><?= e((string) count($sticked)) ?> <?= e(Lang::get('home.post_count_short')) ?></span>
             </div>
             <div class="panel__body panel__body--flush">
                 <div class="feed">
@@ -48,24 +50,24 @@ $canPost = auth()->check();
 
     <section class="panel">
         <div class="panel__head">
-            <h2 class="panel__title">Bài viết mới nhất</h2>
-            <span class="panel__meta"><?= e((string) ($stats['count_post'] ?? 0)) ?> bài · <?= e((string) ($stats['count_user'] ?? 0)) ?> thành viên</span>
+            <h2 class="panel__title"><?= e(Lang::get('home.latest_posts')) ?></h2>
+            <span class="panel__meta"><?= e(Lang::get('home.post_stats', ['posts' => (int) ($stats['count_post'] ?? 0), 'members' => (int) ($stats['count_user'] ?? 0)])) ?></span>
         </div>
 
-        <form class="feed-tools" action="<?= e(url('/')) ?>" method="get" aria-label="Tùy chọn danh sách bài viết">
+        <form class="feed-tools" action="<?= e(url('/')) ?>" method="get" aria-label="<?= e(Lang::get('home.sort_options')) ?>">
             <?php if ($category !== null): ?>
                 <input type="hidden" name="category" value="<?= e((string) (int) $category['id']) ?>">
             <?php endif; ?>
 
             <label class="field feed-tools__field">
-                <span>Sắp xếp theo</span>
+                <span><?= e(Lang::get('home.sort_by')) ?></span>
                 <select name="order_by">
                     <?php
                     $orderLabels = [
-                        'id' => 'Bài gần đây',
-                        'time' => 'Mới đăng',
-                        'update_time' => 'Hoạt động gần đây',
-                        'view' => 'Lượt xem',
+                        'id' => Lang::get('home.sort.id'),
+                        'time' => Lang::get('home.sort.time'),
+                        'update_time' => Lang::get('home.sort.update_time'),
+                        'view' => Lang::get('home.sort.view'),
                     ];
                     foreach ((array) config('app.content.post_list_order_by', ['update_time']) as $field):
                         $field = (string) $field;
@@ -78,33 +80,33 @@ $canPost = auth()->check();
             </label>
 
             <label class="field feed-tools__field feed-tools__direction">
-                <span>Thứ tự</span>
+                <span><?= e(Lang::get('home.direction')) ?></span>
                 <select name="sort">
                     <?php foreach ((array) config('app.content.post_list_sort', ['desc']) as $direction): ?>
                         <?php $direction = (string) $direction; ?>
                         <option value="<?= e($direction) ?>" <?= $sort === $direction ? 'selected' : '' ?>>
-                            <?= e($direction === 'asc' ? 'Tăng dần' : 'Giảm dần') ?>
+                            <?= e(Lang::get($direction === 'asc' ? 'home.ascending' : 'home.descending')) ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
             </label>
 
-            <button class="btn btn--ghost btn--sm feed-tools__submit" type="submit">Áp dụng</button>
+            <button class="btn btn--ghost btn--sm feed-tools__submit" type="submit"><?= e(Lang::get('home.apply')) ?></button>
         </form>
 
         <?php if ($canPost): ?>
             <div class="panel__body" style="padding-bottom:0">
-                <a class="btn btn--sm" href="<?= e(url('/articles/post')) ?>"><?= icon('plus', '', 15) ?> Viết bài mới</a>
+                <a class="btn btn--sm" href="<?= e(url('/articles/post')) ?>"><?= icon('plus', '', 15) ?> <?= e(Lang::get('home.write_post')) ?></a>
             </div>
         <?php endif; ?>
 
         <div class="panel__body panel__body--flush">
             <?php if ($posts === []): ?>
                 <?= view('partials/empty', [
-                    'title' => 'Chưa có bài viết nào',
-                    'message' => $canPost ? 'Hãy là người mở đầu chuyên mục này.' : 'Quay lại sau để xem bài viết mới nhất.',
+                    'title' => Lang::get('home.empty_posts_title'),
+                    'message' => Lang::get($canPost ? 'home.empty_posts_member' : 'home.empty_posts_visitor'),
                     'icon' => 'file',
-                    'actionLabel' => $canPost ? 'Viết bài đầu tiên' : 'Về trang chủ',
+                    'actionLabel' => Lang::get($canPost ? 'home.write_first_post' : 'home.back_home'),
                     'actionUrl' => $canPost ? url('/articles/post') : url('/'),
                 ]) ?>
             <?php else: ?>
@@ -125,11 +127,11 @@ $canPost = auth()->check();
         <section class="panel">
             <div class="panel__head">
                 <?= icon('folder', '', 16) ?>
-                <h2 class="panel__title">Chuyên mục</h2>
+                <h2 class="panel__title"><?= e(Lang::get('home.categories')) ?></h2>
             </div>
             <div class="panel__body panel__body--flush">
                 <?php if ($categories === []): ?>
-                    <p class="muted" style="padding:var(--s-4)">Chưa có chuyên mục nào.</p>
+                    <p class="muted" style="padding:var(--s-4)"><?= e(Lang::get('home.empty_categories')) ?></p>
                 <?php else: ?>
                     <div class="feed">
                         <?php foreach ($categories as $item): ?>
@@ -142,7 +144,7 @@ $canPost = auth()->check();
                                     <p class="feed__meta"><?= e((string) $item['slug']) ?></p>
                                 </div>
                                 <div class="feed__stats">
-                                    <span class="feed__stat"><b><?= e((string) (int) ($item['count_post'] ?? 0)) ?></b>bài</span>
+                                    <span class="feed__stat"><b><?= e((string) (int) ($item['count_post'] ?? 0)) ?></b><?= e(Lang::get('home.post_count_short')) ?></span>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -154,12 +156,12 @@ $canPost = auth()->check();
         <section class="panel">
             <div class="panel__head">
                 <?= icon('users', '', 16) ?>
-                <h2 class="panel__title">Đang trực tuyến</h2>
+                <h2 class="panel__title"><?= e(Lang::get('home.online')) ?></h2>
                 <span class="panel__meta"><?= e((string) count($online_users)) ?></span>
             </div>
             <div class="panel__body panel__body--flush">
                 <?php if ($online_users === []): ?>
-                    <p class="muted" style="padding:var(--s-4)">Chưa có ai đang trực tuyến.</p>
+                    <p class="muted" style="padding:var(--s-4)"><?= e(Lang::get('home.empty_online')) ?></p>
                 <?php else: ?>
                     <div class="feed">
                         <?php foreach ($online_users as $member): ?>

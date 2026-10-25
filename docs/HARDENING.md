@@ -27,8 +27,9 @@ out, and a hash that was created without it still verifies.
 ## 2. Transport and headers
 
 * **Content Security Policy** with a per-request nonce. `script-src` is
-  `'self' 'nonce-…'`, `script-src-attr` is `'none'`, `object-src` and
-  `frame-src` are `'none'`, `base-uri` and `form-action` are `'self'`.
+  `'self' 'nonce-…'`, `script-src-attr` is `'none'`, `object-src` is `'none'`;
+  `frame-src` allows only the privacy-enhanced YouTube embed origin for validated
+  `[vid]` tags. `base-uri` and `form-action` are `'self'`.
   `style-src` keeps `'unsafe-inline'` because the forum paints each category
   with a derived colour; inline *styles* cannot execute script in any current
   browser, whereas inline *scripts* can — those are locked down with the
@@ -53,9 +54,14 @@ out, and a hash that was created without it still verifies.
   the site root (`safe_url()`).
 * Uploads are validated by **content**, not by the file name: the extension is
   checked against an allow list, the real MIME type is sniffed, the size is
-  capped, the name is sanitised, and the file is stored outside the document
-  root under a generated name.
-* File names rendered in the interface always go through `e()`.
+  capped and the display name is sanitised. With `STORAGE_DRIVER=s3`, bytes are
+  transferred over HTTPS using SigV4 and a deterministic key derived from the
+  post/file ids; the bucket should remain private.
+* S3 download URLs for attachments are presigned for five minutes and only
+  exposed for public or free files, the post author, or an administrator.
+  Shared-library objects are scoped to the owning member for listing and are
+  publicly downloadable only when marked public and free. File names rendered in
+  the interface always go through `e()`.
 
 ---
 
@@ -114,6 +120,7 @@ out, and a hash that was created without it still verifies.
 | `APP_KEY` | Application secret. Required in production, at least 32 characters. |
 | `APP_PASSWORD_PEPPER` | Optional, mixed into every password hash. |
 | `DB_PASSWORD` | The database credential. |
+| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Credentials for the configured object-storage bucket. Grant only the required bucket/object permissions. |
 
 `.env` is git-ignored. `config/local.php` is the alternative for secrets that
 must not live in a file at all.

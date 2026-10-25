@@ -33,12 +33,25 @@ $canComment = auth()->check();
                         <?= member_chip($author) ?>
                     <?php endif; ?>
                     <span><?= e(date('d.m.Y · H:i', (int) $post['time'])) ?></span>
-                    <span>cập nhật <?= e(time_ago((int) $post['update_time'])) ?></span>
-                    <span><?= e((string) (int) $post['view']) ?> lượt xem</span>
+                    <span><?= e(\SoulCMS\Support\Lang::get('articles.detail.updated', ['time' => time_ago((int) $post['update_time'])])) ?></span>
+                    <span><?= e(\SoulCMS\Support\Lang::get('articles.detail.views', ['count' => (string) (int) $post['view']])) ?></span>
                 </p>
             </header>
 
             <div class="prose"><?= markdown_to_html((string) $post['content']) ?></div>
+
+            <div class="row mt-5" style="align-items:center">
+                <span class="feed__meta" style="font-family:inherit"><?= e(\SoulCMS\Support\Lang::get('articles.detail.likes', ['count' => (string) ($like_summary['count'] ?? 0)])) ?></span>
+                <?php if ($viewer_authenticated && !($like_summary['liked'] ?? false) && auth()->user()->nick() !== (string) $post['author']): ?>
+                    <form method="post" action="<?= e(url('/articles/' . (int) $post['id'] . '-' . $post['slug'] . '.html')) ?>">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="like">
+                        <button class="btn btn--ghost btn--sm" type="submit"><?= e(\SoulCMS\Support\Lang::get('articles.detail.like')) ?></button>
+                    </form>
+                <?php elseif ($like_summary['liked'] ?? false): ?>
+                    <span class="chip chip--tag"><?= e(\SoulCMS\Support\Lang::get('articles.detail.liked')) ?></span>
+                <?php endif; ?>
+            </div>
 
             <?php if ($tags !== []): ?>
                 <p class="row mt-5" style="margin-bottom:0">
@@ -56,7 +69,7 @@ $canComment = auth()->check();
         <section class="panel">
             <div class="panel__head">
                 <?= icon('layers', '', 16) ?>
-                <h2 class="panel__title">Danh sách chương</h2>
+                <h2 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('articles.detail.chapters')) ?></h2>
                 <span class="panel__meta"><?= e((string) count($chapters)) ?></span>
             </div>
             <div class="panel__body panel__body--flush">
@@ -86,7 +99,7 @@ $canComment = auth()->check();
         <section class="panel">
             <div class="panel__head">
                 <?= icon('download', '', 16) ?>
-                <h2 class="panel__title">Tệp đính kèm</h2>
+                <h2 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('articles.detail.attachments')) ?></h2>
                 <span class="panel__meta"><?= e((string) count($files)) ?></span>
             </div>
             <div class="panel__body panel__body--flush">
@@ -114,13 +127,13 @@ $canComment = auth()->check();
     <section class="panel">
         <div class="panel__head">
             <?= icon('forum', '', 16) ?>
-            <h2 class="panel__title">Bình luận</h2>
+            <h2 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('articles.detail.comments')) ?></h2>
             <span class="panel__meta"><?= e((string) $comment_count) ?></span>
         </div>
 
         <div class="panel__body panel__body--flush">
             <?php if ($comments === []): ?>
-                <p class="muted" style="padding:var(--s-4)">Chưa có bình luận nào. Hãy là người đầu tiên.</p>
+                <p class="muted" style="padding:var(--s-4)"><?= e(\SoulCMS\Support\Lang::get('articles.detail.no_comments')) ?></p>
             <?php else: ?>
                 <div class="thread" style="padding:0 var(--s-4)">
                     <?php foreach ($comments as $comment): ?>
@@ -146,18 +159,18 @@ $canComment = auth()->check();
                 <form class="form" method="post" action="<?= e(url('/articles/' . (int) $post['id'] . '-' . $post['slug'] . '.html')) ?>">
                     <?= csrf_field() ?>
                     <div class="field">
-                        <label for="comment">Viết bình luận</label>
-                        <textarea id="comment" name="comment" rows="4" required placeholder="Chia sẻ ý kiến của bạn…"></textarea>
+                        <label for="comment"><?= e(\SoulCMS\Support\Lang::get('articles.detail.write_comment')) ?></label>
+                        <textarea id="comment" name="comment" rows="4" required placeholder="<?= e(\SoulCMS\Support\Lang::get('articles.detail.comment_placeholder')) ?>"></textarea>
                     </div>
                     <div class="form__actions">
-                        <button class="btn" type="submit"><?= icon('reply', '', 15) ?> Gửi bình luận</button>
+                        <button class="btn" type="submit"><?= icon('reply', '', 15) ?> <?= e(\SoulCMS\Support\Lang::get('articles.detail.send_comment')) ?></button>
                     </div>
                 </form>
             </div>
         <?php else: ?>
             <div class="panel__body">
                 <p class="muted" style="margin:0">
-                    <a href="<?= e(url('/login')) ?>">Đăng nhập</a> để tham gia thảo luận.
+                    <a href="<?= e(url('/login')) ?>"><?= e(\SoulCMS\Support\Lang::get('shell.login')) ?></a> <?= e(\SoulCMS\Support\Lang::get('articles.detail.login_to_comment')) ?>
                 </p>
             </div>
         <?php endif; ?>

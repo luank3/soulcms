@@ -9,7 +9,7 @@
 <section class="panel">
     <div class="panel__head">
         <?= icon('layers', '', 16) ?>
-        <h1 class="panel__title">Thêm chương</h1>
+        <h1 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('articles.chapter.add')) ?></h1>
         <span class="panel__meta truncate"><?= e($post['title']) ?></span>
     </div>
 
@@ -20,18 +20,18 @@
             <?= csrf_field() ?>
 
             <div class="field">
-                <label for="title">Tiêu đề chương</label>
-                <input id="title" name="title" required autofocus placeholder="Chương 1 — Bắt đầu">
+                <label for="title"><?= e(\SoulCMS\Support\Lang::get('articles.chapter.title')) ?></label>
+                <input id="title" name="title" required autofocus placeholder="<?= e(\SoulCMS\Support\Lang::get('articles.chapter.title_placeholder')) ?>">
             </div>
 
             <div class="field">
-                <label for="content">Nội dung</label>
+                <label for="content"><?= e(\SoulCMS\Support\Lang::get('articles.publish.content')) ?></label>
                 <textarea id="content" name="content" rows="12" required></textarea>
             </div>
 
             <div class="form__actions">
-                <button class="btn" type="submit"><?= icon('check', '', 15) ?> Lưu chương</button>
-                <a class="btn btn--ghost" href="<?= e(url('/articles/' . (int) $post['id'] . '-' . $post['slug'] . '.html')) ?>">Huỷ</a>
+                <button class="btn" type="submit"><?= icon('check', '', 15) ?> <?= e(\SoulCMS\Support\Lang::get('articles.chapter.save')) ?></button>
+                <a class="btn btn--ghost" href="<?= e(url('/articles/' . (int) $post['id'] . '-' . $post['slug'] . '.html')) ?>"><?= e(\SoulCMS\Support\Lang::get('articles.publish.cancel')) ?></a>
             </div>
         </form>
     </div>

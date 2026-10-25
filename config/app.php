@@ -60,6 +60,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'middleware' => [
+        SoulCMS\Http\Middleware\LocaleMiddleware::class,
         SoulCMS\Http\Middleware\RequestIdMiddleware::class,
         SoulCMS\Http\Middleware\SecurityHeadersMiddleware::class,
         // Compression sits outside the static handler: the asset middleware
@@ -107,7 +108,7 @@ return [
         'password_pepper' => Env::string('APP_PASSWORD_PEPPER', ''),
         'csrf_exempt' => ['api.', 'headless.'],
         // Extra Content Security Policy sources, e.g. ["img-src" => ["https:"]].
-        'csp_extra' => [],
+        'csp_extra' => ['frame-src' => ['https://www.youtube-nocookie.com']],
         'headers' => [],
     ],
 
@@ -116,6 +117,19 @@ return [
     | Uploads
     |--------------------------------------------------------------------------
     */
+    'storage' => [
+        // Use "s3" for a private S3-compatible bucket; local storage remains the default.
+        'driver' => Env::string('STORAGE_DRIVER', 'local'),
+        's3' => [
+            'endpoint' => Env::string('S3_ENDPOINT', ''),
+            'bucket' => Env::string('S3_BUCKET', ''),
+            'region' => Env::string('S3_REGION', ''),
+            'access_key' => Env::string('S3_ACCESS_KEY', ''),
+            'secret_key' => Env::string('S3_SECRET_KEY', ''),
+            'path_style' => Env::bool('S3_PATH_STYLE', true),
+        ],
+    ],
+
     'uploads' => [
         'max_bytes' => (int) Env::int('UPLOAD_MAX_BYTES', 10 * 1024 * 1024),
         'allowed_extensions' => [
@@ -147,6 +161,17 @@ return [
         'user_list_sort' => ['asc', 'desc'],
         'system_bot' => 'SystemBOT',
         'news_category' => 1,
+    ],
+
+    'mail' => [
+        'host' => Env::string('MAIL_HOST', ''),
+        'port' => (int) Env::int('MAIL_PORT', 587),
+        'encryption' => Env::string('MAIL_ENCRYPTION', 'tls'),
+        'username' => Env::string('MAIL_USERNAME', ''),
+        'password' => Env::string('MAIL_PASSWORD', ''),
+        'from_address' => Env::string('MAIL_FROM_ADDRESS', ''),
+        'from_name' => Env::string('MAIL_FROM_NAME', Env::string('APP_NAME', 'SoulCMS')),
+        'timeout' => (int) Env::int('MAIL_TIMEOUT', 10),
     ],
 
     /*

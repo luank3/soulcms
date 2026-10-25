@@ -18,6 +18,6 @@
         <p><?= e($message) ?></p>
     <?php endif; ?>
     <?php if (!empty($actionUrl)): ?>
-        <a class="btn btn--ghost btn--sm mt-4" href="<?= e($actionUrl) ?>"><?= e($actionLabel ?? 'Tiếp tục') ?></a>
+        <a class="btn btn--ghost btn--sm mt-4" href="<?= e($actionUrl) ?>"><?= e($actionLabel ?? \SoulCMS\Support\Lang::get('common.continue')) ?></a>
     <?php endif; ?>
 </div>

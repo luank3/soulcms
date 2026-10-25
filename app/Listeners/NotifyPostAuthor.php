@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SoulCMS\App\Listeners;
 
 use SoulCMS\Events\CommentPosted;
+use SoulCMS\Support\Lang;
 
 /**
  * Notifies the author of a post that somebody commented on it.
@@ -34,11 +35,10 @@ final class NotifyPostAuthor
         $this->connection->insert('mail', [
             'sender_receiver' => mb_strtolower($postAuthor) . '_' . mb_strtolower($bot),
             'nick' => $bot,
-            'content' => sprintf(
-                '@%s đã bình luận trong bài viết "%s" của bạn.',
-                $event->author,
-                (string) ($event->post['title'] ?? '')
-            ),
+            'content' => Lang::get('notification.post_commented', [
+                'author' => $event->author,
+                'title' => (string) ($event->post['title'] ?? ''),
+            ]),
             'time' => $now,
             'update_time' => $now,
             'type' => 'system',

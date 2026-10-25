@@ -8,20 +8,20 @@
 ?>
 <section class="panel">
     <div class="panel__head">
-        <h1 class="panel__title">Tìm kiếm</h1>
+        <h1 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('articles.search.title')) ?></h1>
         <?php if ($query !== ''): ?>
-            <span class="panel__meta"><?= e((string) count($results)) ?> kết quả</span>
+            <span class="panel__meta"><?= e(\SoulCMS\Support\Lang::get('articles.search.count', ['count' => (string) count($results)])) ?></span>
         <?php endif; ?>
     </div>
 
     <div class="panel__body">
         <form class="form form--tight" method="get" action="<?= e(url('/search')) ?>">
             <div class="field">
-                <label for="q">Từ khoá</label>
-                <input id="q" type="search" name="q" value="<?= e($query) ?>" placeholder="Ví dụ: hướng dẫn, php, sqlite…" autofocus>
+                <label for="q"><?= e(\SoulCMS\Support\Lang::get('articles.search.keyword')) ?></label>
+                <input id="q" type="search" name="q" value="<?= e($query) ?>" placeholder="<?= e(\SoulCMS\Support\Lang::get('articles.search.placeholder')) ?>" autofocus>
             </div>
             <div class="form__actions">
-                <button class="btn" type="submit"><?= icon('search', '', 15) ?> Tìm</button>
+                <button class="btn" type="submit"><?= icon('search', '', 15) ?> <?= e(\SoulCMS\Support\Lang::get('articles.search.submit')) ?></button>
             </div>
         </form>
     </div>
@@ -30,8 +30,8 @@
         <div class="panel__body panel__body--flush">
             <?php if ($results === []): ?>
                 <?= view('partials/empty', [
-                    'title' => 'Không tìm thấy kết quả',
-                    'message' => 'Không có bài viết nào khớp với từ khoá này. Thử một từ khác hoặc bỏ bớt điều kiện.',
+                    'title' => \SoulCMS\Support\Lang::get('articles.search.empty_title'),
+                    'message' => \SoulCMS\Support\Lang::get('articles.search.empty_message'),
                     'icon' => 'search',
                 ]) ?>
             <?php else: ?>

@@ -5,16 +5,22 @@ declare(strict_types=1);
 namespace SoulCMS\App\Modules\Articles\Controllers;
 
 use SoulCMS\App\Modules\Articles\Repositories\ArticleRepository;
+use SoulCMS\App\Modules\Articles\Services\FilePurchaseService;
 use SoulCMS\App\Modules\User\Repositories\UserRepository;
 use SoulCMS\Events\CommentPosted;
+use SoulCMS\Events\PostLiked;
 use SoulCMS\Events\PostPublished;
 use SoulCMS\Foundation\Container;
 use SoulCMS\Foundation\Events\Dispatcher;
 use SoulCMS\Foundation\Str;
+use SoulCMS\Support\Lang;
+use SoulCMS\Support\PageMetadata;
+use SoulCMS\Support\S3Storage;
 use SoulCMS\Http\Controller;
 use SoulCMS\Http\UploadedFile;
 use SoulCMS\Http\Request;
 use SoulCMS\Http\Response;
+use SoulCMS\Http\Session\SessionManager;
 
 /**
  * The forum controller.
@@ -26,6 +32,8 @@ final class ArticleController extends Controller
         private ArticleRepository $articles,
         private UserRepository $users,
         private \SoulCMS\Database\Connection $connection,
+        private Dispatcher $events,
+        private SessionManager $session,
     ) {
         parent::__construct($container);
     }
@@ -38,7 +46,7 @@ final class ArticleController extends Controller
         $posts = $this->articles->postList(0, $per, 'update_time', 'desc', ($page - 1) * $per);
 
         return $this->html('articles/index', [
-            'page_title' => 'Bai viet',
+            'page_title' => Lang::get('articles.index.title'),
             'posts' => $this->hydrate($posts),
             'categories' => $this->articles->categoryList(20),
         ]);
@@ -50,10 +58,25 @@ final class ArticleController extends Controller
         $post = $this->resolvePost($slug);
 
         if ($post === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         $postId = (int) $post['id'];
+        $viewer = $this->auth->user();
+        $likeSummary = $this->articles->postLikeSummary($postId, $viewer->nick());
+
+        if ($this->isPost() && (string) $this->input('action', '') === 'like' && $viewer->isAuthenticated) {
+            if ($this->articles->addPostLike($postId, $viewer->nick())) {
+                $this->events->dispatch(new PostLiked(
+                    $postId,
+                    $viewer->nick(),
+                    (string) $post['author'],
+                    (string) $post['title']
+                ));
+            }
+
+            return Response::redirect(url('/articles/' . $postId . '-' . $post['slug'] . '.html'));
+        }
 
         if ($this->isPost()) {
             $response = $this->handleComment($post);
@@ -75,13 +98,22 @@ final class ArticleController extends Controller
             $post['category_slug'] = $category['slug'];
         }
 
+        $pageMetadata = PageMetadata::forPost(
+            (string) $post['title'],
+            (string) $post['content'],
+            isset($post['meta_data']) ? (string) $post['meta_data'] : null
+        );
         $page = max(1, (int) $this->query('page', 1));
         $per = 10;
         $commentCount = $this->articles->countCommentsInPost($postId);
 
         return $this->html('articles/post_detail', [
-            'page_title' => (string) $post['title'],
+            'page_title' => $pageMetadata['title'],
+            'page_description' => $pageMetadata['description'],
+            'page_keyword' => $pageMetadata['keyword'],
             'post' => $post,
+            'like_summary' => $likeSummary,
+            'viewer_authenticated' => $viewer->isAuthenticated,
             'chapters' => $this->articles->chapterList($postId),
             'comments' => $this->articles->commentList($postId, $per, ($page - 1) * $per),
             'comment_count' => $commentCount,
@@ -147,7 +179,7 @@ final class ArticleController extends Controller
         }
 
         if ($chapter === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         $post = $this->articles->postDetail((int) $chapter['box']);
@@ -168,7 +200,7 @@ final class ArticleController extends Controller
         $results = $query === '' ? [] : $this->articles->search($query);
 
         return $this->html('articles/search', [
-            'page_title' => 'Tim kiem',
+            'page_title' => Lang::get('articles.search.title'),
             'query' => $query,
             'results' => $results,
         ]);
@@ -180,14 +212,14 @@ final class ArticleController extends Controller
         $tag = $this->articles->tagBySlug($slug);
 
         if ($tag === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         $per = (int) $this->config->get('app.content.per_page', 10);
         $page = max(1, (int) $this->query('page', 1));
 
         return $this->html('articles/tag_detail', [
-            'page_title' => 'Tag: ' . (string) $tag['name'],
+            'page_title' => Lang::get('articles.tag.page_title', ['tag' => (string) $tag['name']]),
             'tag' => $tag,
             'posts' => $this->hydrate($this->articles->postListByTag((int) $tag['id'], $per, ($page - 1) * $per)),
             'pagination' => paging(url('/tag/' . $slug), $page, (int) ceil(max(1, (int) $tag['count']) / $per)),
@@ -205,7 +237,7 @@ final class ArticleController extends Controller
 
         if (!$this->isPost()) {
             return $this->html('articles/post_publish', [
-                'page_title' => 'Viet bai',
+                'page_title' => Lang::get('articles.publish.title'),
                 'categories' => $categories,
                 'errors' => [],
                 'old' => [],
@@ -220,16 +252,16 @@ final class ArticleController extends Controller
         $errors = [];
 
         if ($title === '') {
-            $errors['title'] = 'The title is required.';
+            $errors['title'] = Lang::get('articles.validation.title_required');
         }
 
         if ($categoryId <= 0 || !$this->articles->categoryExists($categoryId)) {
-            $errors['category'] = 'Please choose a valid category.';
+            $errors['category'] = Lang::get('articles.validation.category_invalid');
         }
 
         if ($errors !== []) {
             return $this->html('articles/post_publish', [
-                'page_title' => 'Viet bai',
+                'page_title' => Lang::get('articles.publish.title'),
                 'categories' => $categories,
                 'errors' => $errors,
                 'old' => ['title' => $title, 'content' => $content, 'category' => $categoryId],
@@ -276,7 +308,7 @@ final class ArticleController extends Controller
 
         if (!$this->isPost()) {
             return $this->html('articles/category_publish', [
-                'page_title' => 'Quan ly chuyen muc',
+                'page_title' => Lang::get('articles.categories.title'),
                 'categories' => $this->articles->categoryList(100, false),
                 'errors' => [],
             ]);
@@ -287,9 +319,9 @@ final class ArticleController extends Controller
 
         if ($name === '' || $slug === '') {
             return $this->html('articles/category_publish', [
-                'page_title' => 'Quan ly chuyen muc',
+                'page_title' => Lang::get('articles.categories.title'),
                 'categories' => $this->articles->categoryList(100, false),
-                'errors' => ['name' => 'The category name is required.'],
+                'errors' => ['name' => Lang::get('articles.validation.category_name_required')],
             ], 'layouts/app');
         }
 
@@ -315,12 +347,12 @@ final class ArticleController extends Controller
         $post = $this->articles->postDetail($postId);
 
         if ($post === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         if (!$this->isPost()) {
             return $this->html('articles/chapter_publish', [
-                'page_title' => 'Them chuong',
+                'page_title' => Lang::get('articles.chapter.add'),
                 'post' => $post,
                 'errors' => [],
             ]);
@@ -331,9 +363,9 @@ final class ArticleController extends Controller
 
         if ($title === '') {
             return $this->html('articles/chapter_publish', [
-                'page_title' => 'Them chuong',
+                'page_title' => Lang::get('articles.chapter.add'),
                 'post' => $post,
-                'errors' => ['title' => 'The chapter title is required.'],
+                'errors' => ['title' => Lang::get('articles.validation.chapter_title_required')],
             ], 'layouts/app');
         }
 
@@ -364,19 +396,19 @@ final class ArticleController extends Controller
             : $this->articles->postDetail($id);
 
         if ($row === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         $isOwner = (string) $row['author'] === (string) $this->auth->user()->nick();
         $isStaff = $this->auth->level() >= 120;
 
         if (!$isOwner && !$isStaff) {
-            return Response::html('Forbidden', 403);
+            return Response::html(Lang::get('error.403.title'), 403);
         }
 
         if (!$this->isPost()) {
             return $this->html('articles/edit', [
-                'page_title' => 'Chinh sua',
+                'page_title' => Lang::get('articles.edit.' . ($action === 'chapter' ? 'chapter' : 'post')),
                 'action' => $action,
                 'row' => $row,
                 'categories' => $this->articles->categoryList(50, false),
@@ -410,7 +442,7 @@ final class ArticleController extends Controller
     public function delete(Request $request): Response
     {
         if (!$this->auth->check() || $this->auth->level() < 120) {
-            return Response::html('Forbidden', 403);
+            return Response::html(Lang::get('error.403.title'), 403);
         }
 
         $action = (string) $this->param('action', 'post');
@@ -439,12 +471,12 @@ final class ArticleController extends Controller
         $post = $this->articles->postDetail($postId);
 
         if ($post === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
         }
 
         if (!$this->isPost()) {
             return $this->html('articles/file_upload', [
-                'page_title' => 'Tai len tep',
+                'page_title' => Lang::get('articles.file.upload_title'),
                 'post' => $post,
             ]);
         }
@@ -456,6 +488,14 @@ final class ArticleController extends Controller
         $maxBytes = (int) $this->config->get('app.uploads.max_bytes', 10485760);
         $allowedExtensions = (array) $this->config->get('app.uploads.allowed_extensions', []);
         $allowedMimeTypes = (array) $this->config->get('app.uploads.allowed_mime_types', []);
+
+        $storageDriver = (string) $this->config->get('app.storage.driver', 'local');
+        $s3 = $storageDriver === 's3' ? $this->container->get(S3Storage::class) : null;
+        if ($storageDriver === 's3' && (!$s3 instanceof S3Storage || !$s3->isConfigured())) {
+            return $this->wantsJson()
+                ? $this->json(['status' => 'error', 'uploaded' => 0, 'rejected' => 0], 503)
+                : Response::html(Lang::get('articles.storage.not_configured'), 503);
+        }
 
         foreach ($files as $field => $file) {
             if (!is_array($file)) {
@@ -470,24 +510,45 @@ final class ArticleController extends Controller
                 continue;
             }
 
-            // The file itself is stored outside the document root under a
-            // generated name; only the metadata is kept in the database.
-            $stored = $upload->store(\SoulCMS\Foundation\Paths::storage('uploads/' . $postId));
-
-            $this->articles->createRow(ArticleRepository::TABLE_FILE, [
+            $recordId = $this->articles->createRow(ArticleRepository::TABLE_FILE, [
                 'time' => time(),
                 'filename' => $upload->originalName,
                 'filecate' => $upload->extension,
                 'filesize' => $upload->size,
                 'passphrase' => '0',
-                'type' => $stored ? 'normal' : 'rejected',
+                'type' => $storageDriver === 's3' ? 'rejected' : 'normal',
                 'author' => (string) $this->auth->user()->nick(),
                 'status' => 'private',
                 'price' => 0,
                 'blogid' => $postId,
             ]);
 
-            ++$uploaded;
+            if ($s3 instanceof S3Storage) {
+                $key = $this->articles->s3ObjectKey([
+                    'id' => $recordId,
+                    'blogid' => $postId,
+                    'filecate' => $upload->extension,
+                    'type' => 's3',
+                ]);
+                $stored = $key !== null && $s3->putFile($upload->temporaryPath, $key, $upload->mimeType);
+                $this->articles->updateFileStorageType($recordId, $stored ? 's3' : 'rejected');
+                if ($stored) {
+                    ++$uploaded;
+                } else {
+                    ++$rejected;
+                }
+
+                continue;
+            }
+
+            $stored = $upload->store(\SoulCMS\Foundation\Paths::storage('uploads/' . $postId));
+            $this->articles->updateFileStorageType($recordId, $stored ? 'normal' : 'rejected');
+
+            if ($stored) {
+                ++$uploaded;
+            } else {
+                ++$rejected;
+            }
         }
 
         if ($this->wantsJson()) {
@@ -507,14 +568,103 @@ final class ArticleController extends Controller
         $file = $this->articles->fileDetail($id);
 
         if ($file === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
+        }
+
+        $post = $this->articles->postDetail((int) ($file['blogid'] ?? 0));
+        if ($post === null) {
+            return Response::html(Lang::get('error.404.title'), 404);
+        }
+
+        $viewer = $this->auth->user();
+        $isAuthor = $viewer->isAuthenticated && $viewer->nick() === (string) ($post['author'] ?? '');
+        $isAdmin = $viewer->isAuthenticated && $viewer->level() >= 120;
+        $purchases = $this->container->get(FilePurchaseService::class);
+        $isPurchased = $viewer->isAuthenticated
+            && $purchases instanceof FilePurchaseService
+            && $purchases->hasPurchased($id, $viewer->nick());
+        $price = max(0, (int) ($file['price'] ?? 0));
+        $isFree = $price === 0;
+
+        if ($this->isPost()) {
+            $action = (string) $this->input('action', '');
+            if ($action === 'buy') {
+                if (!$viewer->isAuthenticated) {
+                    return Response::redirect(url('/login'));
+                }
+
+                if (!$this->session->validateToken(is_string($this->input('_token')) ? $this->input('_token') : null)) {
+                    return Response::html(Lang::get('error.403.title'), 403);
+                }
+
+                if ($isAuthor || $isAdmin || $isPurchased || $isFree || !$purchases instanceof FilePurchaseService || !$purchases->purchase($id, $viewer->id())) {
+                    return $this->wantsJson()
+                        ? $this->json(['status' => 'error', 'message' => Lang::get('articles.file.purchase_failed')], 422)
+                        : Response::redirect(url('/view-file/' . $id));
+                }
+
+                if ($this->wantsJson()) {
+                    return $this->json(['status' => 'success', 'id' => $id]);
+                }
+
+                return Response::redirect(url('/view-file/' . $id));
+            }
+
+            if ($action === 'delete' && ($isAuthor || $isAdmin)) {
+                $this->articles->deleteFile($id);
+
+                return Response::redirect(url('/articles/' . (int) $post['id'] . '-' . $post['slug'] . '.html'));
+            }
+        }
+
+        $canDownload = (string) ($file['status'] ?? '') === 'public'
+            || $isFree
+            || $isAuthor
+            || $isAdmin
+            || $isPurchased;
+
+        $buyerNicks = array_values(array_unique(array_filter(
+            array_map('trim', explode('.', (string) ($file['mua'] ?? ''))),
+            static fn (string $nick): bool => $nick !== ''
+        )));
+        $buyerDetails = $this->users->byNick($buyerNicks);
+        $purchasers = [];
+        foreach ($buyerNicks as $nick) {
+            $member = $buyerDetails[mb_strtolower($nick)] ?? null;
+            if ($member !== null) {
+                $purchasers[] = $member;
+            }
         }
 
         return $this->html('articles/file_detail', [
             'page_title' => (string) $file['filename'],
             'file' => $file,
-            'post' => $this->articles->postDetail((int) ($file['blogid'] ?? 0)),
+            'post' => $post,
+            'purchasers' => $purchasers,
+            'download_url' => $canDownload ? $this->downloadUrl($file) : null,
+            'can_purchase' => $viewer->isAuthenticated && !$isAuthor && !$isAdmin && !$isPurchased && !$isFree
+                && (string) ($file['status'] ?? 'private') === 'private',
+            'viewer_balance' => (int) $viewer->get('xu', 0),
+            'has_purchased' => $isPurchased,
         ]);
+    }
+
+    private function downloadUrl(array $file): ?string
+    {
+        $key = $this->articles->s3ObjectKey($file);
+        if ($key === null) {
+            return null;
+        }
+
+        $downloadName = basename(str_replace('\\', '/', (string) ($file['filename'] ?? 'download')));
+        $downloadName = UploadedFile::sanitiseName($downloadName);
+        $extension = strtolower((string) ($file['filecate'] ?? ''));
+        $downloadName = pathinfo($downloadName, PATHINFO_FILENAME) . '.' . $extension;
+        $storage = $this->container->get(S3Storage::class);
+
+        return $storage instanceof S3Storage && $storage->isConfigured()
+            ? $storage->presignedGetUrl($key, 300, $downloadName, $extension)
+            : null;
     }
 
     public function sitemap(Request $request): Response

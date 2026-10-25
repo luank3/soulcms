@@ -7,11 +7,43 @@ namespace SoulCMS\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 use SoulCMS\Routing\Route;
 use SoulCMS\Routing\RouteCollection;
+use SoulCMS\Foundation\Container;
+use SoulCMS\Http\Request;
+use SoulCMS\Http\Uri;
 use SoulCMS\Routing\RouteCompiler;
 use SoulCMS\Routing\Router;
 
 final class RouterTest extends TestCase
 {
+    public function testHomeAliasesAreRegisteredToTheHomeAction(): void
+    {
+        $previous = Container::getInstance();
+        $container = new Container();
+        Container::swap($container);
+        $router = new Router();
+        $router->get('/', static fn (): string => 'home', 'home');
+        $container->instance('router', $router);
+        $container->instance('modules', new class {
+            public function registerRoutes(Router $router): void
+            {
+            }
+        });
+
+        try {
+            require dirname(__DIR__, 2) . '/routes/web.php';
+            $router->freeze();
+
+            foreach (['/home' => 'home.alias', '/index.html' => 'home.index'] as $path => $name) {
+                $match = $router->dispatch($this->request('GET', $path));
+                self::assertNotNull($match, $path);
+                self::assertSame($name, $match['name'], $path);
+                self::assertSame([\SoulCMS\App\Modules\Home\Controllers\HomeController::class, 'index'], $match['handler']);
+            }
+        } finally {
+            Container::swap($previous);
+        }
+    }
+
     public function testStaticRouteIsMatchedExactly(): void
     {
         $router = new Router();

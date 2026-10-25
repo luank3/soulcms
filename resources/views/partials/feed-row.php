@@ -23,6 +23,11 @@ $marker = $categorySlug !== '' ? $categorySlug : $slug;
     <div>
         <h3 class="feed__title"><a href="<?= e($permalink) ?>"><?= e($post['title']) ?></a></h3>
 
+        <?php $excerpt = content_excerpt((string) ($post['content'] ?? '')); ?>
+        <?php if ($excerpt !== ''): ?>
+            <p class="muted small"><?= e($excerpt) ?></p>
+        <?php endif; ?>
+
         <p class="feed__meta">
             <?php if ($categoryName !== ''): ?>
                 <span class="tagmark" <?= marker_style($categorySlug) ?>><?= e($categoryName) ?></span>
@@ -39,8 +44,8 @@ $marker = $categorySlug !== '' ? $categorySlug : $slug;
     </div>
 
     <div class="feed__stats">
-        <span class="feed__stat"><b><?= e((string) (int) ($post['comment_count'] ?? 0)) ?></b>bình luận</span>
-        <span class="feed__stat"><b><?= e((string) (int) ($post['chapter_count'] ?? 0)) ?></b>chương</span>
-        <span class="feed__stat"><b><?= e((string) (int) ($post['view'] ?? 0)) ?></b>lượt xem</span>
+        <span class="feed__stat"><?= e(\SoulCMS\Support\Lang::get('feed.comments', ['count' => (string) (int) ($post['comment_count'] ?? 0)])) ?></span>
+        <span class="feed__stat"><?= e(\SoulCMS\Support\Lang::get('feed.chapters', ['count' => (string) (int) ($post['chapter_count'] ?? 0)])) ?></span>
+        <span class="feed__stat"><?= e(\SoulCMS\Support\Lang::get('feed.views', ['count' => (string) (int) ($post['view'] ?? 0)])) ?></span>
     </div>
 </div>

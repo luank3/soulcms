@@ -32,6 +32,140 @@ final class UserRepository extends BaseRepository
     }
 
     /**
+     * @return list<string>
+     */
+    public function blocklist(int $userId): array
+    {
+        $value = $this->connection->scalar(
+            'SELECT `blocklist` FROM `users` WHERE `id` = ? LIMIT 1',
+            [$userId]
+        );
+
+        return $this->parseBlocklist(is_string($value) ? $value : '');
+    }
+
+    /**
+     * @return list<array{nick:string,name:string}>
+     */
+    public function blockedMembers(int $userId): array
+    {
+        $blocklist = $this->blocklist($userId);
+        if ($blocklist === []) {
+            return [];
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($blocklist), '?'));
+        $rows = $this->connection->select(
+            sprintf('SELECT `nick`, `name` FROM `users` WHERE LOWER(`nick`) IN (%s)', $placeholders),
+            array_map('mb_strtolower', $blocklist)
+        );
+        $members = [];
+
+        foreach ($rows as $row) {
+            $members[mb_strtolower((string) $row['nick'])] = $row;
+        }
+
+        return array_map(static function (string $nick) use ($members): array {
+            $member = $members[mb_strtolower($nick)] ?? null;
+            return ['nick' => $nick, 'name' => (string) ($member['name'] ?? $nick)];
+        }, $blocklist);
+    }
+
+    public function blockUser(int $userId, string $nick): void
+    {
+        $list = $this->blocklist($userId);
+        $key = mb_strtolower($nick);
+        $existing = array_map('mb_strtolower', $list);
+
+        if (!in_array($key, $existing, true)) {
+            $list[] = $nick;
+        }
+
+        $this->updateUser($userId, ['blocklist' => implode('.', $list)]);
+    }
+
+    public function unblockUser(int $userId, string $nick): void
+    {
+        $key = mb_strtolower($nick);
+        $list = array_values(array_filter(
+            $this->blocklist($userId),
+            static fn (string $item): bool => mb_strtolower($item) !== $key
+        ));
+
+        $this->updateUser($userId, ['blocklist' => implode('.', $list)]);
+    }
+
+    public function isBlockedBy(int $userId, string $nick): bool
+    {
+        $key = mb_strtolower($nick);
+
+        foreach ($this->blocklist($userId) as $blocked) {
+            if (mb_strtolower($blocked) === $key) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Counts recent post/comment activity for a profile without writing to users.
+     *
+     * @return array{posts:int,comments:int}
+     */
+    public function reputationActivity(string $nick, int $since): array
+    {
+        $row = $this->connection->selectOne(
+            'SELECT (SELECT COUNT(*) FROM `articles_post` WHERE `author` = ? AND `time` >= ?) AS posts, '
+            . '(SELECT COUNT(*) FROM `articles_cmt` WHERE `author` = ? AND `time` >= ?) AS comments',
+            [$nick, $since, $nick, $since]
+        );
+
+        return [
+            'posts' => (int) ($row['posts'] ?? 0),
+            'comments' => (int) ($row['comments'] ?? 0),
+        ];
+    }
+
+    private function parseBlocklist(string $value): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map('trim', explode('.', $value)),
+            static fn (string $nick): bool => $nick !== ''
+        )));
+    }
+
+    public function purchaseAccount(int $userId): ?array
+    {
+        return $this->connection->selectOne(
+            'SELECT `id`, `nick`, `xu` FROM `users` WHERE `id` = ? LIMIT 1',
+            [$userId]
+        );
+    }
+
+    public function creditPoints(int $userId, int $amount): void
+    {
+        if ($amount > 0) {
+            $this->connection->query(
+                'UPDATE `users` SET `xu` = `xu` + ? WHERE `id` = ?',
+                [$amount, $userId]
+            );
+        }
+    }
+
+    public function debitPointsIfSufficient(int $userId, int $amount): bool
+    {
+        if ($amount < 1) {
+            return false;
+        }
+
+        return $this->connection->query(
+            'UPDATE `users` SET `xu` = `xu` - ? WHERE `id` = ? AND `xu` >= ?',
+            [$amount, $userId, $amount]
+        )->rowCount() === 1;
+    }
+
+    /**
      * @return array<string,mixed>|null
      */
     public function findByEmail(string $email): ?array
@@ -40,6 +174,33 @@ final class UserRepository extends BaseRepository
             'SELECT * FROM `users` WHERE `email` = ? LIMIT 1',
             [$email]
         );
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function findByResetToken(string $token, int $now): ?array
+    {
+        return $this->connection->selectOne(
+            'SELECT * FROM `users` WHERE `reset_token` = ? AND `reset_expires` > ? LIMIT 1',
+            [$token, $now]
+        );
+    }
+
+    public function clearResetToken(int $userId, string $token): void
+    {
+        $this->connection->query(
+            'UPDATE `users` SET `reset_token` = NULL, `reset_expires` = NULL WHERE `id` = ? AND `reset_token` = ?',
+            [$userId, $token]
+        );
+    }
+
+    public function consumeResetToken(int $userId, string $token, int $now, string $passwordHash): bool
+    {
+        return $this->connection->query(
+            'UPDATE `users` SET `pass` = ?, `reset_token` = NULL, `reset_expires` = NULL WHERE `id` = ? AND `reset_token` = ? AND `reset_expires` > ?',
+            [$passwordHash, $userId, $token, $now]
+        )->rowCount() === 1;
     }
 
     /**
@@ -101,6 +262,14 @@ final class UserRepository extends BaseRepository
         ) !== null;
     }
 
+    public function emailExistsForOtherUser(string $email, int $userId): bool
+    {
+        return $this->connection->selectOne(
+            'SELECT `id` FROM `users` WHERE `email` = ? AND `id` <> ? LIMIT 1',
+            [$email, $userId]
+        ) !== null;
+    }
+
     /**
      * @param array<string,mixed> $data
      */
@@ -126,6 +295,15 @@ final class UserRepository extends BaseRepository
             'SELECT * FROM `users_waifu` WHERE `user_id` = ? LIMIT 1',
             [$userId]
         );
+    }
+
+    public function setWaifuClosed(int $userId, bool $closed): bool
+    {
+        if ($this->waifu($userId) === null) {
+            return false;
+        }
+
+        return $this->connection->update(self::TABLE_WAIFU, ['close' => $closed ? 1 : 0], ['user_id' => $userId]) === 1;
     }
 
     public function ensureWaifu(int $userId): void
@@ -166,12 +344,22 @@ final class UserRepository extends BaseRepository
     /**
      * @return list<array<string,mixed>>
      */
-    public function onlineUsers(int $limit = 20, int $window = 300): array
+    public function onlineUsers(int $limit = 20, int $window = 300, ?int $now = null): array
     {
         return $this->connection->select(
             'SELECT `id`, `nick`, `avatar`, `level` FROM `users` WHERE `on` > ? ORDER BY `on` DESC LIMIT ' . max(1, $limit),
-            [time() - $window]
+            [($now ?? time()) - max(0, $window)]
         );
+    }
+
+    public function isOnline(int $userId, int $window = 300, ?int $now = null): bool
+    {
+        $lastSeen = $this->connection->scalar(
+            'SELECT `on` FROM `users` WHERE `id` = ? LIMIT 1',
+            [$userId]
+        );
+
+        return $lastSeen !== null && (int) $lastSeen > ($now ?? time()) - max(0, $window);
     }
 
     /**

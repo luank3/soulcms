@@ -30,6 +30,13 @@ php bin/soulcms serve     # http://127.0.0.1:8000
 driver. Pass `--force` to drop the existing tables first, and
 `--admin=…`, `--password=…`, `--email=…` to customise the administrator.
 
+The `MAIL_*` variables in the example file configure a dependency-free SMTP sender
+for password-reset links. Configure a valid host, TLS/SSL mode, sender address,
+and credentials (or leave username/password both empty for an unauthenticated
+relay). Requests continue to return the same generic confirmation for known and
+unknown addresses; reset tokens expire after one hour and are cleared if
+transport delivery fails.
+
 `db:seed` inserts a small community (7 members with different roles, 10 posts
 with chapters, comments and tags, and a live chat) so the interface can be
 reviewed with real content in it. The seeded accounts all use the password
@@ -107,6 +114,14 @@ portable and the DDL is rendered by the matching grammar.
 | `DB_DATABASE` | The database name, or the file path for SQLite. |
 | `APP_PASSWORD_PEPPER` | Optional secret mixed into every password hash. |
 | `SESSION_IDLE_TIMEOUT` | Minutes of inactivity before a session dies. |
+| `STORAGE_DRIVER` | `local` by default; `s3` stores validated post attachments in a private S3-compatible bucket. |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION` | S3-compatible service endpoint, bucket, and signing region (HTTPS endpoint required). |
+| `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Credentials used for server-side SigV4 uploads and signed downloads; keep secret. |
+| `S3_PATH_STYLE` | Use path-style addressing (`true` by default; set `false` for valid DNS bucket names and virtual-host providers). |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_ENCRYPTION` | SMTP host, port, and `tls`/`ssl` encryption for password-reset mail. |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | SMTP authentication credentials. |
+| `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | Sender identity for password-reset mail. |
+| `MAIL_TIMEOUT` | SMTP connection/read timeout in seconds (1–60). |
 
 ---
 

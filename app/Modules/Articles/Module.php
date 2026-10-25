@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SoulCMS\App\Modules\Articles;
 
 use SoulCMS\Routing\Router;
+use SoulCMS\Support\Lang;
 
 /**
  * The forum: posts, chapters, comments, tags and attachments.
@@ -18,12 +19,12 @@ final class Module extends \SoulCMS\Foundation\Module\Module
 
     public function title(): string
     {
-        return 'Bài viết';
+        return Lang::get('module.articles.title');
     }
 
     public function description(): string
     {
-        return 'Bài viết, chương, bình luận, thẻ và tệp đính kèm.';
+        return Lang::get('module.articles.description');
     }
 
     public function routes(Router $router): void

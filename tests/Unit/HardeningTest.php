@@ -99,6 +99,14 @@ final class HardeningTest extends TestCase
         self::assertStringNotContainsString($first->nonce(), $second->build());
     }
 
+    public function testExplicitFrameSourceReplacesTheDefaultFrameBlock(): void
+    {
+        $policy = (new Csp())->allow('frame-src', 'https://www.youtube-nocookie.com')->build();
+
+        self::assertStringContainsString('frame-src https://www.youtube-nocookie.com', $policy);
+        self::assertStringNotContainsString('frame-src \'none\'', $policy);
+    }
+
     public function testThePolicyLocksScriptsDown(): void
     {
         $policy = (new Csp())->build();
@@ -192,6 +200,80 @@ final class HardeningTest extends TestCase
     /* ------------------------------------------------------------------
        Validation
        ------------------------------------------------------------------ */
+
+    public function testBbcodeBoldAndItalicAreRenderedAfterEscaping(): void
+    {
+        self::assertSame(
+            '<p><strong>bold</strong> and <em>italic</em></p>',
+            markdown_to_html('[b]bold[/b] and [i]italic[/i]')
+        );
+    }
+
+    public function testBbcodeUrlAndImageAcceptOnlySafeUrls(): void
+    {
+        self::assertSame(
+            '<p><a href="https://example.test/path" rel="nofollow noopener">site</a> <img src="https://example.test/pic.png" alt="pic.png" loading="lazy"></p>',
+            markdown_to_html('[url=https://example.test/path]site[/url] [img]https://example.test/pic.png[/img]')
+        );
+        self::assertSame(
+            '<p>x</p>',
+            markdown_to_html('[url=javascript:alert(1)]x[/url]')
+        );
+    }
+
+    public function testBbcodeQuoteAndCodeAreRenderedAsText(): void
+    {
+        self::assertSame(
+            '<blockquote><p>quoted &lt;script&gt;</p></blockquote>',
+            markdown_to_html('[quote]quoted <script>[/quote]')
+        );
+        self::assertSame(
+            '<p><code>[b]literal[/b]</code></p>',
+            markdown_to_html('[code][b]literal[/b][/code]')
+        );
+    }
+
+    public function testTheConfigurationValidatorRejectsUnknownStorageDriver(): void
+    {
+        $validator = new ConfigValidator([
+            'app' => [
+                'url' => ['host' => 'localhost'],
+                'env' => 'testing',
+                'storage' => ['driver' => 'telegramupload'],
+            ],
+            'database' => ['default' => 'default', 'connections' => ['default' => ['driver' => 'sqlite', 'database' => '/tmp/x.sqlite']]],
+        ]);
+
+        try {
+            $validator->validate();
+            self::fail('Unknown storage drivers must fail configuration validation.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('app.storage.driver must be local or s3', $exception->getMessage());
+        }
+    }
+
+    public function testTheConfigurationValidatorRejectsIncompleteS3Storage(): void
+    {
+        $validator = new ConfigValidator([
+            'app' => [
+                'url' => ['host' => 'localhost'],
+                'env' => 'production',
+                'key' => str_repeat('k', 40),
+                'storage' => ['driver' => 's3', 's3' => ['endpoint' => 'http://objects.example.test', 'bucket' => 'bucket']],
+            ],
+            'database' => ['default' => 'default', 'connections' => ['default' => ['driver' => 'sqlite', 'database' => '/tmp/x.sqlite']]],
+        ]);
+
+        try {
+            $validator->validate();
+            self::fail('Incomplete S3 configuration must fail validation.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('S3_ENDPOINT must use HTTPS', $exception->getMessage());
+            self::assertStringContainsString('S3_REGION', $exception->getMessage());
+            self::assertStringContainsString('S3_ACCESS_KEY', $exception->getMessage());
+            self::assertStringContainsString('S3_SECRET_KEY', $exception->getMessage());
+        }
+    }
 
     public function testTheValidatorReportsEveryBrokenRule(): void
     {

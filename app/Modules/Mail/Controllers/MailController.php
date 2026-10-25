@@ -12,6 +12,7 @@ use SoulCMS\Foundation\Events\Dispatcher;
 use SoulCMS\Http\Controller;
 use SoulCMS\Http\Request;
 use SoulCMS\Http\Response;
+use SoulCMS\Support\Lang;
 
 /**
  * The private message controller.
@@ -43,14 +44,17 @@ final class MailController extends Controller
 
         if ($partner !== '') {
             $messages = $this->mail->conversation($nick, $partner, $per, ($page - 1) * $per);
+            $this->mail->markConversationRead($nick, $partner);
         }
 
         $partners = $this->mail->parseList((string) $this->auth->user()->get('mail_list', ''));
+        $latest = $this->mail->latestDetails($nick, $partners);
 
         return $this->html('mail/index', [
-            'page_title' => 'Tin nhan',
+            'page_title' => Lang::get('mail.inbox.title'),
             'messages' => $messages,
             'partners' => $partners,
+            'latest' => $latest,
             'partner' => $partner,
             'current_page' => $page,
         ]);
@@ -66,12 +70,16 @@ final class MailController extends Controller
         $target = $this->users->findByNick($receiver);
 
         if ($target === null) {
-            return Response::html('Not found', 404);
+            return Response::html(Lang::get('error.404.title'), 404);
+        }
+
+        if ($this->users->isBlockedBy((int) $target['id'], $this->auth->user()->nick())) {
+            return Response::html(Lang::get('mail.blocked_recipient'), 403);
         }
 
         if (!$this->isPost()) {
             return $this->html('mail/send', [
-                'page_title' => 'Gui tin nhan',
+                'page_title' => Lang::get('mail.compose.page_title'),
                 'receiver' => $target,
                 'errors' => [],
             ]);
@@ -81,9 +89,9 @@ final class MailController extends Controller
 
         if ($content === '') {
             return $this->html('mail/send', [
-                'page_title' => 'Gui tin nhan',
+                'page_title' => Lang::get('mail.compose.page_title'),
                 'receiver' => $target,
-                'errors' => ['content' => 'The message cannot be empty.'],
+                'errors' => ['content' => Lang::get('mail.validation.message_empty')],
             ], 'layouts/app');
         }
 
@@ -137,10 +145,32 @@ final class MailController extends Controller
         $bot = (string) $this->config->get('app.content.system_bot', 'SystemBOT');
 
         $messages = $this->mail->conversation($bot, $nick, 50, 0);
+        $this->mail->markSystemRead($nick, $bot);
 
         return $this->html('mail/system', [
-            'page_title' => 'Thong bao he thong',
+            'page_title' => Lang::get('mail.system.title'),
             'messages' => $messages,
         ]);
+    }
+
+    public function clearSystem(Request $request): Response
+    {
+        if (!$this->auth->check()) {
+            return Response::redirect(url('/login'));
+        }
+
+        if (!$this->isPost()) {
+            return Response::html(Lang::get('error.method_not_allowed'), 405);
+        }
+
+        $nick = (string) $this->auth->user()->nick();
+        $bot = (string) $this->config->get('app.content.system_bot', 'SystemBOT');
+        $this->mail->clearSystem($nick, $bot);
+
+        if ($this->wantsJson()) {
+            return $this->json(['status' => 'success']);
+        }
+
+        return Response::redirect(url('/mail/system'));
     }
 }

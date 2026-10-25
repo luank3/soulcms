@@ -15,15 +15,15 @@ foreach ($messages as $message) {
 <section class="panel">
     <div class="panel__head">
         <?= icon('chat', '', 16) ?>
-        <h1 class="panel__title">Trò chuyện</h1>
-        <span class="panel__meta"><?= e((string) count($messages)) ?> tin nhắn gần đây</span>
+        <h1 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('shoutbox.title')) ?></h1>
+        <span class="panel__meta"><?= e(\SoulCMS\Support\Lang::get('shoutbox.count', ['count' => (string) count($messages)])) ?></span>
     </div>
 
     <div class="panel__body panel__body--flush">
         <?php if ($messages === []): ?>
             <?= view('partials/empty', [
-                'title' => 'Phòng trò chuyện còn trống',
-                'message' => 'Hãy là người đầu tiên gửi một lời chào.',
+                'title' => \SoulCMS\Support\Lang::get('shoutbox.empty_title'),
+                'message' => \SoulCMS\Support\Lang::get('shoutbox.empty_message'),
                 'icon' => 'chat',
             ]) ?>
         <?php else: ?>
@@ -44,14 +44,14 @@ foreach ($messages as $message) {
             <form class="form form--tight" method="post" action="<?= e(url('/shoutbox/send')) ?>">
                 <?= csrf_field() ?>
                 <div class="row" style="flex-wrap:nowrap">
-                    <input name="message" maxlength="2000" required placeholder="Nói gì đó…">
-                    <button class="btn" type="submit">Gửi</button>
+                    <input name="message" maxlength="2000" required placeholder="<?= e(\SoulCMS\Support\Lang::get('shoutbox.placeholder')) ?>">
+                    <button class="btn" type="submit"><?= e(\SoulCMS\Support\Lang::get('shoutbox.send')) ?></button>
                 </div>
             </form>
         </div>
     <?php else: ?>
         <div class="panel__body">
-            <p class="muted" style="margin:0"><a href="<?= e(url('/login')) ?>">Đăng nhập</a> để tham gia trò chuyện.</p>
+            <p class="muted" style="margin:0"><a href="<?= e(url('/login')) ?>"><?= e(\SoulCMS\Support\Lang::get('shell.login')) ?></a> <?= e(\SoulCMS\Support\Lang::get('shoutbox.login_prompt')) ?></p>
         </div>
     <?php endif; ?>
 </section>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SoulCMS\App\Modules\User;
 
 use SoulCMS\Routing\Router;
+use SoulCMS\Support\Lang;
 
 /**
  * Registration, authentication and member profiles.
@@ -18,12 +19,12 @@ final class Module extends \SoulCMS\Foundation\Module\Module
 
     public function title(): string
     {
-        return 'Thành viên';
+        return Lang::get('module.user.title');
     }
 
     public function description(): string
     {
-        return 'Đăng ký, đăng nhập và hồ sơ thành viên.';
+        return Lang::get('module.user.description');
     }
 
     public function routes(Router $router): void
@@ -34,6 +35,9 @@ final class Module extends \SoulCMS\Foundation\Module\Module
         $router->add('/login/password/forgot', [\SoulCMS\App\Modules\User\Controllers\UserController::class, 'forgotPassword'], 'GET|POST', 'user.password.forgot');
         $router->add('/login/password/reset', [\SoulCMS\App\Modules\User\Controllers\UserController::class, 'resetPassword'], 'GET|POST', 'user.password.reset');
         $router->add('/users', [\SoulCMS\App\Modules\User\Controllers\UserController::class, 'userList'], 'GET|POST', 'user.list');
+        $router->add('/user/{account:[a-zA-Z0-9\-_]+}/info', [\SoulCMS\App\Modules\User\Controllers\UserController::class, 'editProfile'], 'GET|POST', 'user.edit');
+        $router->add('/user/{account:[a-zA-Z0-9\-_]+}/blocklist', [\SoulCMS\App\Modules\User\Controllers\UserController::class, 'blocklist'], 'GET|POST', 'user.blocklist');
+        $router->add('/user/{account:[a-zA-Z0-9\-_]+}/waifu', [\SoulCMS\App\Modules\User\Controllers\UserController::class, 'waifu'], 'POST', 'user.waifu');
         $router->add('/user/{account:[a-zA-Z0-9\-_]+}', [\SoulCMS\App\Modules\User\Controllers\UserController::class, 'userDetail'], 'GET|POST', 'user.detail');
     }
 }

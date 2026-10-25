@@ -10,7 +10,7 @@
 <section class="panel">
     <div class="panel__head">
         <?= icon('pencil', '', 16) ?>
-        <h1 class="panel__title">Viết bài mới</h1>
+        <h1 class="panel__title"><?= e(\SoulCMS\Support\Lang::get('articles.publish.title')) ?></h1>
     </div>
 
     <div class="panel__body">
@@ -20,13 +20,13 @@
             <?= csrf_field() ?>
 
             <div class="field">
-                <label for="title">Tiêu đề</label>
+                <label for="title"><?= e(\SoulCMS\Support\Lang::get('articles.publish.title_label')) ?></label>
                 <input id="title" name="title" value="<?= e((string) ($old['title'] ?? '')) ?>" required autofocus
-                       placeholder="Một tiêu đề rõ ràng, dễ tìm">
+                       placeholder="<?= e(\SoulCMS\Support\Lang::get('articles.publish.title_placeholder')) ?>">
             </div>
 
             <div class="field">
-                <label for="category">Chuyên mục</label>
+                <label for="category"><?= e(\SoulCMS\Support\Lang::get('articles.publish.category')) ?></label>
                 <select id="category" name="category" required>
                     <?php foreach ($categories as $category): ?>
                         <option value="<?= e((string) (int) $category['id']) ?>"
@@ -38,27 +38,27 @@
             </div>
 
             <div class="field">
-                <label for="slug">Đường dẫn (tùy chọn)</label>
+                <label for="slug"><?= e(\SoulCMS\Support\Lang::get('articles.publish.slug')) ?></label>
                 <input id="slug" name="slug" value="<?= e((string) ($old['slug'] ?? '')) ?>"
-                       placeholder="tu-dien-bai-viet">
-                <span class="field__hint">Bỏ trống để hệ thống tự sinh từ tiêu đề.</span>
+                       placeholder="example-post-slug">
+                <span class="field__hint"><?= e(\SoulCMS\Support\Lang::get('articles.publish.slug_hint')) ?></span>
             </div>
 
             <div class="field">
-                <label for="tags">Thẻ (phân tách bằng dấu phẩy)</label>
-                <input id="tags" name="tags" value="<?= e((string) ($old['tags'] ?? '')) ?>" placeholder="php, hiệu năng">
+                <label for="tags"><?= e(\SoulCMS\Support\Lang::get('articles.publish.tags')) ?></label>
+                <input id="tags" name="tags" value="<?= e((string) ($old['tags'] ?? '')) ?>" placeholder="php, performance">
             </div>
 
             <div class="field">
-                <label for="content">Nội dung</label>
+                <label for="content"><?= e(\SoulCMS\Support\Lang::get('articles.publish.content')) ?></label>
                 <textarea id="content" name="content" rows="12" required
-                          placeholder="Viết nội dung của bạn…"><?= e((string) ($old['content'] ?? '')) ?></textarea>
-                <span class="field__hint">Hỗ trợ **đậm**, *nghiêng*, `mã` và danh sách bằng dấu gạch ngang.</span>
+                          placeholder="<?= e(\SoulCMS\Support\Lang::get('articles.publish.content_placeholder')) ?>"><?= e((string) ($old['content'] ?? '')) ?></textarea>
+                <span class="field__hint"><?= e(\SoulCMS\Support\Lang::get('articles.publish.content_hint')) ?></span>
             </div>
 
             <div class="form__actions">
-                <button class="btn" type="submit"><?= icon('check', '', 15) ?> Đăng bài</button>
-                <a class="btn btn--ghost" href="<?= e(url('/')) ?>">Huỷ</a>
+                <button class="btn" type="submit"><?= icon('check', '', 15) ?> <?= e(\SoulCMS\Support\Lang::get('articles.publish.submit')) ?></button>
+                <a class="btn btn--ghost" href="<?= e(url('/')) ?>"><?= e(\SoulCMS\Support\Lang::get('articles.publish.cancel')) ?></a>
             </div>
         </form>
     </div>

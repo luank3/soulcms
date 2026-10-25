@@ -55,10 +55,10 @@
             }
 
             if (label) {
-                label.textContent = theme === 'dark' ? 'Chế độ sáng' : 'Chế độ tối';
+                label.textContent = theme === 'dark' ? root.dataset.uiThemeLight : root.dataset.uiThemeDark;
             }
 
-            button.setAttribute('aria-label', theme === 'dark' ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối');
+            button.setAttribute('aria-label', theme === 'dark' ? root.dataset.uiSwitchLight : root.dataset.uiSwitchDark);
         }
     }
 
@@ -118,7 +118,7 @@
 
             if (toggle) {
                 toggle.setAttribute('aria-expanded', String(isOpen));
-                toggle.setAttribute('aria-label', isOpen ? 'Đóng menu' : 'Mở menu');
+                toggle.setAttribute('aria-label', isOpen ? root.dataset.uiDrawerClose : root.dataset.uiDrawerOpen);
             }
 
             if (rail) {
@@ -509,7 +509,7 @@
 
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(text).then(function () {
-                    toast('Đã sao chép vào bộ nhớ tạm', 'success');
+                    toast(root.dataset.uiCopySuccess, 'success');
                 });
             }
         });

@@ -10,7 +10,13 @@ use SoulCMS\Database\Connection;
 use SoulCMS\Database\ConnectionConfig;
 use SoulCMS\Database\ConnectionFactory;
 use SoulCMS\App\Listeners\NotifyPostAuthor;
+use SoulCMS\App\Listeners\NotifyPostAuthorOfLike;
+use SoulCMS\App\Modules\Articles\Repositories\ArticleRepository;
+use SoulCMS\App\Modules\Articles\Services\FilePurchaseService;
+use SoulCMS\App\Modules\Media\Repositories\MediaRepository;
+use SoulCMS\App\Modules\User\Repositories\UserRepository;
 use SoulCMS\Events\CommentPosted;
+use SoulCMS\Events\PostLiked;
 use SoulCMS\Foundation\Events\Dispatcher;
 use SoulCMS\Foundation\Module\ModuleManager;
 use SoulCMS\Http\Csp;
@@ -19,6 +25,7 @@ use SoulCMS\Http\Kernel;
 use SoulCMS\Http\Middleware\CompressionMiddleware;
 use SoulCMS\Http\Middleware\ConditionalGetMiddleware;
 use SoulCMS\Http\Middleware\CsrfMiddleware;
+use SoulCMS\Http\Middleware\LocaleMiddleware;
 use SoulCMS\Http\Middleware\RateLimitMiddleware;
 use SoulCMS\Http\Middleware\RequestIdMiddleware;
 use SoulCMS\Http\Middleware\SecurityHeadersMiddleware;
@@ -32,7 +39,9 @@ use SoulCMS\Routing\Router;
 use SoulCMS\Support\Lang;
 use SoulCMS\Support\Logger;
 use SoulCMS\Support\RateLimiter;
+use SoulCMS\Support\S3Storage;
 use SoulCMS\Support\SettingsStore;
+use SoulCMS\Support\SmtpMailer;
 use SoulCMS\View\Engine;
 use SoulCMS\View\ViewFactory;
 
@@ -141,7 +150,27 @@ final class Application
     {
         $container = $this->container;
 
-        $container->singleton(Clock::class, static fn (): Clock => new Clock());
+        $container->singleton(FilePurchaseService::class, static fn (Container $c): FilePurchaseService => new FilePurchaseService(
+            $c->get(Connection::class),
+            $c->get(ArticleRepository::class),
+            $c->get(UserRepository::class),
+        ));
+        $container->singleton(MediaRepository::class, static fn (Container $c): MediaRepository => new MediaRepository(
+            $c->get(Connection::class),
+        ));
+
+        $container->singleton(S3Storage::class, static function (Container $c): S3Storage {
+            /** @var Config $config */
+            $config = $c->get('config');
+
+            return new S3Storage($config);
+        });
+        $container->singleton(SmtpMailer::class, static function (Container $c): SmtpMailer {
+            /** @var Config $config */
+            $config = $c->get('config');
+
+            return new SmtpMailer($config);
+        });
 
         $container->singleton(PasswordHasher::class, static function (Container $c): PasswordHasher {
             /** @var Config $config */
@@ -165,6 +194,7 @@ final class Application
             $dispatcher = new Dispatcher();
 
             $dispatcher->listen(CommentPosted::class, NotifyPostAuthor::class);
+            $dispatcher->listen(PostLiked::class, NotifyPostAuthorOfLike::class);
 
             return $dispatcher;
         });
@@ -342,6 +372,13 @@ final class Application
 
         $container->singleton(RequestIdMiddleware::class, static function (): RequestIdMiddleware {
             return new RequestIdMiddleware();
+        });
+
+        $container->singleton(LocaleMiddleware::class, static function (Container $c): LocaleMiddleware {
+            /** @var Config $config */
+            $config = $c->get('config');
+
+            return new LocaleMiddleware((string) $config->get('app.locale', 'vi'));
         });
 
         $container->singleton('csp', static function (Container $c): Csp {

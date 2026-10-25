@@ -1,5 +1,5 @@
 <!doctype html>
-<html data-theme="dark">
+<html data-theme="dark" data-ui-theme-light="Light mode" data-ui-theme-dark="Dark mode" data-ui-switch-light="Switch to light mode" data-ui-switch-dark="Switch to dark mode" data-ui-drawer-open="Open menu" data-ui-drawer-close="Close menu" data-ui-copy-success="Copied to clipboard">
 <head>
     <meta charset="utf-8">
     <title>SoulCMS — front-end behaviour</title>
@@ -46,7 +46,7 @@ window.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('theme').click();
     check('theme toggles to light', document.documentElement.getAttribute('data-theme') === 'light');
-    check('theme label updates', document.querySelector('[data-theme-label]').textContent === 'Chế độ tối');
+    check('theme label updates', document.querySelector('[data-theme-label]').textContent === 'Dark mode');
     document.getElementById('theme').click();
     check('theme toggles back to dark', document.documentElement.getAttribute('data-theme') === 'dark');
 
@@ -76,6 +76,7 @@ window.addEventListener('DOMContentLoaded', function () {
     drawer.click();
     check('drawer opens', document.body.getAttribute('data-drawer') === 'open');
     check('drawer announces expanded state', drawer.getAttribute('aria-expanded') === 'true');
+    check('drawer label follows the active locale', drawer.getAttribute('aria-label') === 'Close menu');
     check('drawer scrim becomes available', !drawerScrim.hidden);
     check('open drawer becomes available to assistive tech', !drawerNav.inert && drawerNav.getAttribute('aria-hidden') === 'false');
     check('focus moves into drawer', document.activeElement === document.getElementById('drawer-close'));

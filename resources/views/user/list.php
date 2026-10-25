@@ -6,26 +6,28 @@
  * @var string $pagination
  */
 
+use SoulCMS\Support\Lang;
+
 ?>
 <section class="panel">
     <div class="panel__head">
         <?= icon('users', '', 16) ?>
-        <h1 class="panel__title">Thành viên</h1>
-        <span class="panel__meta"><?= e((string) $total) ?> người</span>
+        <h1 class="panel__title"><?= e(Lang::get('user.list.title')) ?></h1>
+        <span class="panel__meta"><?= e(Lang::get($total === 1 ? 'user.list.count_one' : 'user.list.count_many', ['count' => $total])) ?></span>
     </div>
 
     <div class="panel__body panel__body--flush">
         <?php if ($users === []): ?>
             <?= view('partials/empty', [
-                'title' => 'Chưa có thành viên nào',
-                'message' => 'Danh sách sẽ hiện ở đây khi có người đăng ký.',
+                'title' => Lang::get('user.list.empty_title'),
+                'message' => Lang::get('user.list.empty_message'),
                 'icon' => 'users',
             ]) ?>
         <?php else: ?>
             <div class="tablewrap">
                 <table class="table">
                     <thead>
-                    <tr><th>Thành viên</th><th>Vai trò</th><th>Karma</th><th>Ngày tham gia</th></tr>
+                    <tr><th><?= e(Lang::get('user.list.member')) ?></th><th><?= e(Lang::get('user.list.role')) ?></th><th><?= e(Lang::get('user.list.karma')) ?></th><th><?= e(Lang::get('user.list.joined')) ?></th></tr>
                     </thead>
                     <tbody>
                     <?php foreach ($users as $member): ?>

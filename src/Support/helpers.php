@@ -299,7 +299,7 @@ if (!function_exists('paging')) {
             return '<li' . $class . '><a href="' . e($href) . '">' . $label . '</a></li>';
         };
 
-        $html = '<nav class="pager" aria-label="Phân trang"><ul class="pager__list">';
+        $html = '<nav class="pager" aria-label="' . e(\SoulCMS\Support\Lang::get('pagination.label')) . '"><ul class="pager__list">';
 
         $html .= $item('‹', $base . 'page=' . max(1, $currentPage - 1), false, $currentPage <= 1);
 
@@ -312,7 +312,10 @@ if (!function_exists('paging')) {
         }
 
         $html .= $item('›', $base . 'page=' . min($totalPages, $currentPage + 1), false, $currentPage >= $totalPages);
-        $html .= '</ul><span>Trang ' . $currentPage . ' / ' . $totalPages . '</span></nav>';
+        $html .= '</ul><span>' . e(\SoulCMS\Support\Lang::get('pagination.summary', [
+            'current' => (string) $currentPage,
+            'total' => (string) $totalPages,
+        ])) . '</span></nav>';
 
         return $html;
     }
@@ -337,22 +340,24 @@ if (!function_exists('time_ago')) {
         $diff = time() - $timestamp;
 
         if ($diff < 60) {
-            return $diff . ' giây trước';
+            $count = $diff;
+            $unit = 'seconds';
+        } elseif ($diff < 3600) {
+            $count = intdiv($diff, 60);
+            $unit = 'minutes';
+        } elseif ($diff < 86400) {
+            $count = intdiv($diff, 3600);
+            $unit = 'hours';
+        } elseif ($diff < 2592000) {
+            $count = intdiv($diff, 86400);
+            $unit = 'days';
+        } else {
+            return date('d.m.Y', $timestamp);
         }
 
-        if ($diff < 3600) {
-            return intdiv($diff, 60) . ' phút trước';
-        }
-
-        if ($diff < 86400) {
-            return intdiv($diff, 3600) . ' giờ trước';
-        }
-
-        if ($diff < 2592000) {
-            return intdiv($diff, 86400) . ' ngày trước';
-        }
-
-        return date('d.m.Y', $timestamp);
+        return \SoulCMS\Support\Lang::get('time.' . $unit . ($count === 1 ? '_one' : '_many'), [
+            'count' => (string) $count,
+        ]);
     }
 }
 
@@ -424,43 +429,43 @@ if (!function_exists('member_role')) {
 
         if ($level < 0) {
             $key = 'banned';
-            $label = 'Bị khoá';
+            $labelKey = 'user.role.banned';
         } elseif ($level >= 127) {
             $key = 'developer';
-            $label = 'Developer';
+            $labelKey = 'user.role.developer';
         } elseif ($level >= 126) {
             $key = 'administrator';
-            $label = 'Administrator';
+            $labelKey = 'user.role.administrator';
         } elseif ($level >= 122) {
             $key = 'super-moderator';
-            $label = 'Super Moderator';
+            $labelKey = 'user.role.super_moderator';
         } elseif ($level === 121) {
             $key = 'moderator';
-            $label = 'Moderator';
+            $labelKey = 'user.role.moderator';
         } elseif ($level >= 120) {
             $key = 'contributor';
-            $label = 'Contributor';
+            $labelKey = 'user.role.contributor';
         } elseif ($days >= 3650) {
             $key = 'legend';
-            $label = 'Legend';
+            $labelKey = 'user.role.legend';
         } elseif ($days >= 2920) {
             $key = 'veteran';
-            $label = 'Veteran';
+            $labelKey = 'user.role.veteran';
         } elseif ($days >= 1825) {
             $key = 'senior';
-            $label = 'Senior';
+            $labelKey = 'user.role.senior';
         } elseif ($days >= 730) {
             $key = 'junior';
-            $label = 'Junior';
+            $labelKey = 'user.role.junior';
         } elseif ($days >= 30) {
             $key = 'member';
-            $label = 'Member';
+            $labelKey = 'user.role.member';
         } else {
             $key = 'newbie';
-            $label = 'Newbie';
+            $labelKey = 'user.role.newbie';
         }
 
-        return ['key' => $key, 'label' => $label, 'level' => $level];
+        return ['key' => $key, 'label' => \SoulCMS\Support\Lang::get($labelKey), 'level' => $level];
     }
 }
 
@@ -545,47 +550,20 @@ if (!function_exists('markdown_to_html')) {
      */
     function markdown_to_html(string $text): string
     {
-        $html = e($text);
+        return \SoulCMS\Support\Bbcode::render($text, 'e');
+    }
+}
 
-        $html = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $html) ?? $html;
-        $html = preg_replace('/(?<![\*\w])\*([^*\n]+)\*(?!\*)/s', '<em>$1</em>', $html) ?? $html;
-        $html = preg_replace('/`([^`\n]+)`/s', '<code>$1</code>', $html) ?? $html;
+if (!function_exists('content_excerpt')) {
+    /**
+     * Render a plain-text excerpt from formatted post content.
+     */
+    function content_excerpt(string $text, int $limit = 160): string
+    {
+        $plainText = html_entity_decode(strip_tags(markdown_to_html($text)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $plainText = preg_replace('/\s+/u', ' ', $plainText) ?? $plainText;
 
-        $lines = explode("\n", $html);
-        $out = [];
-        $inList = false;
-
-        foreach ($lines as $line) {
-            $isItem = (bool) preg_match('/^\s*[-*]\s+(.*)$/', $line, $matches);
-
-            if ($isItem) {
-                if (!$inList) {
-                    $out[] = '<ul>';
-                    $inList = true;
-                }
-
-                $out[] = '<li>' . $matches[1] . '</li>';
-
-                continue;
-            }
-
-            if ($inList) {
-                $out[] = '</ul>';
-                $inList = false;
-            }
-
-            if (trim($line) === '') {
-                continue;
-            }
-
-            $out[] = '<p>' . $line . '</p>';
-        }
-
-        if ($inList) {
-            $out[] = '</ul>';
-        }
-
-        return implode("\n", $out);
+        return \SoulCMS\Foundation\Str::limit(trim($plainText), max(1, $limit), '…');
     }
 }
 

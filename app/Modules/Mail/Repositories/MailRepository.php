@@ -51,6 +51,76 @@ final class MailRepository extends BaseRepository
         );
     }
 
+    public function markConversationRead(string $viewer, string $partner): void
+    {
+        $this->connection->query(
+            sprintf('UPDATE `%s` SET `view` = ? WHERE `sender_receiver` = ?', self::TABLE_MAIL),
+            ['yes', self::conversationKey($viewer, $partner)]
+        );
+    }
+
+    public function markSystemRead(string $recipient, string $systemBot): void
+    {
+        $this->connection->query(
+            sprintf('UPDATE `%s` SET `view` = ? WHERE `type` = ? AND `sender_receiver` = ?', self::TABLE_MAIL),
+            ['yes', 'system', self::conversationKey($recipient, $systemBot)]
+        );
+    }
+
+    public function clearSystem(string $recipient, string $systemBot): void
+    {
+        $this->connection->query(
+            sprintf('DELETE FROM `%s` WHERE `type` = ? AND `sender_receiver` = ?', self::TABLE_MAIL),
+            ['system', self::conversationKey($recipient, $systemBot)]
+        );
+    }
+
+    /**
+     * Fetch the newest message for every requested partner in one query.
+     *
+     * @param list<string> $partners
+     * @return array<string,array<string,mixed>> partner => message
+     */
+    public function latestDetails(string $owner, array $partners): array
+    {
+        $partners = array_values(array_unique(array_filter(
+            array_map('strval', $partners),
+            static fn (string $partner): bool => $partner !== ''
+        )));
+
+        if ($partners === []) {
+            return [];
+        }
+
+        $keys = array_map(static fn (string $partner): string => self::conversationKey($owner, $partner), $partners);
+        $placeholders = implode(', ', array_fill(0, count($keys), '?'));
+        $rows = $this->connection->select(
+            sprintf(
+                'SELECT m.* FROM `%s` m INNER JOIN (
+                    SELECT `sender_receiver`, MAX(`id`) AS latest_id
+                    FROM `%s` WHERE `sender_receiver` IN (%s) GROUP BY `sender_receiver`
+                ) latest ON latest.latest_id = m.`id`',
+                self::TABLE_MAIL,
+                self::TABLE_MAIL,
+                $placeholders
+            ),
+            $keys
+        );
+        $details = [];
+
+        foreach ($rows as $row) {
+            $key = (string) ($row['sender_receiver'] ?? '');
+            foreach ($partners as $index => $partner) {
+                if ($key === $keys[$index]) {
+                    $details[$partner] = $row;
+                    break;
+                }
+            }
+        }
+
+        return $details;
+    }
+
     /**
      * @param array<string,mixed> $data
      */

@@ -47,6 +47,17 @@ final class ChatRepository extends BaseRepository
         );
     }
 
+    /**
+     * @return array<string,mixed>|null
+     */
+    public function message(int $id): ?array
+    {
+        return $this->connection->selectOne(
+            sprintf('SELECT * FROM `%s` WHERE `id` = ? LIMIT 1', self::TABLE_CHAT),
+            [$id]
+        );
+    }
+
     public function countMessages(): int
     {
         return (int) $this->connection->scalar(sprintf('SELECT COUNT(*) FROM `%s`', self::TABLE_CHAT));

@@ -124,6 +124,20 @@ final class ArticleRepository extends BaseRepository
         return $query->get();
     }
 
+    public function createCategory(array $data): int
+    {
+        $editable = array_intersect_key($data, array_flip(['name', 'slug', 'content', 'keyword']));
+
+        return $this->connection->insert(self::TABLE_CATEGORY, $editable);
+    }
+
+    public function updateCategory(int $id, array $data): int
+    {
+        $editable = array_intersect_key($data, array_flip(['name', 'slug', 'content', 'keyword']));
+
+        return $this->connection->update(self::TABLE_CATEGORY, $editable, ['id' => $id]);
+    }
+
     /**
      * @return array<string,mixed>|null
      */
@@ -163,6 +177,67 @@ final class ArticleRepository extends BaseRepository
             sprintf('SELECT * FROM `%s` WHERE `id` = ? LIMIT 1', self::TABLE_POST),
             [$id]
         );
+    }
+
+    /**
+     * @return array{count:int,liked:bool}
+     */
+    public function postLikeSummary(int $postId, string $viewer): array
+    {
+        $post = $this->connection->selectOne(
+            sprintf('SELECT `author`, `like` FROM `%s` WHERE `id` = ? LIMIT 1', self::TABLE_POST),
+            [$postId]
+        );
+
+        if ($post === null) {
+            return ['count' => 0, 'liked' => false];
+        }
+
+        $likes = $this->parseLikes((string) ($post['like'] ?? ''));
+
+        return [
+            'count' => count($likes),
+            'liked' => in_array(mb_strtolower($viewer), $likes, true),
+        ];
+    }
+
+    public function addPostLike(int $postId, string $nick): bool
+    {
+        $nick = mb_strtolower(trim($nick));
+        if ($nick === '') {
+            return false;
+        }
+
+        return $this->connection->transaction(function () use ($postId, $nick): bool {
+            // Taking a write lock before reading prevents simultaneous duplicate likes.
+            $this->connection->query(
+                sprintf('UPDATE `%s` SET `like` = `like` WHERE `id` = ?', self::TABLE_POST),
+                [$postId]
+            );
+            $post = $this->postDetail($postId);
+
+            if ($post === null || mb_strtolower((string) $post['author']) === $nick) {
+                return false;
+            }
+
+            $likes = $this->parseLikes((string) ($post['like'] ?? ''));
+            if (in_array($nick, $likes, true)) {
+                return false;
+            }
+
+            array_unshift($likes, $nick);
+            $this->connection->update(self::TABLE_POST, ['like' => implode('.', $likes)], ['id' => $postId]);
+
+            return true;
+        });
+    }
+
+    /** @return list<string> */
+    private function parseLikes(string $raw): array
+    {
+        $likes = array_map('mb_strtolower', array_filter(explode('.', $raw), static fn (string $nick): bool => trim($nick) !== ''));
+
+        return array_values(array_unique($likes));
     }
 
     /**
@@ -270,12 +345,61 @@ final class ArticleRepository extends BaseRepository
     /**
      * @return array<string,mixed>|null
      */
+    public function fileForPurchase(int $id): ?array
+    {
+        return $this->fileDetail($id);
+    }
+
+    public function appendFilePurchaserIfUnchanged(int $id, ?string $expectedBuyers, string $newBuyers): bool
+    {
+        $statement = $this->connection->query(
+            sprintf(
+                'UPDATE `%s` SET `mua` = ? WHERE `id` = ? AND `price` > 0 AND '
+                . ($expectedBuyers === null ? '`mua` IS NULL' : '`mua` = ?'),
+                self::TABLE_FILE
+            ),
+            $expectedBuyers === null ? [$newBuyers, $id] : [$newBuyers, $id, $expectedBuyers]
+        );
+
+        return $statement->rowCount() === 1;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
     public function fileDetail(int $id): ?array
     {
         return $this->connection->selectOne(
             sprintf('SELECT * FROM `%s` WHERE `id` = ? LIMIT 1', self::TABLE_FILE),
             [$id]
         );
+    }
+
+    public function updateFileStorageType(int $fileId, string $type): void
+    {
+        if (!in_array($type, ['s3', 'normal', 'rejected'], true)) {
+            throw new \InvalidArgumentException('Unsupported attachment storage type.');
+        }
+
+        $this->connection->update(self::TABLE_FILE, ['type' => $type], ['id' => $fileId]);
+    }
+
+    /**
+     * Build a private S3 object key from existing attachment metadata.
+     *
+     * @param array<string,mixed> $file
+     */
+    public function s3ObjectKey(array $file): ?string
+    {
+        $id = (int) ($file['id'] ?? 0);
+        $postId = (int) ($file['blogid'] ?? 0);
+        $extension = strtolower((string) ($file['filecate'] ?? ''));
+
+        if (($file['type'] ?? null) !== 's3' || $id < 1 || $postId < 1 || preg_match('/^[a-z0-9]{1,12}$/', $extension) !== 1) {
+            return null;
+        }
+
+        return sprintf('articles/%d/%d.%s', $postId, $id, $extension);
     }
 
     /**
@@ -488,6 +612,29 @@ final class ArticleRepository extends BaseRepository
         ));
 
         return array_map('intval', $row ?: []);
+    }
+
+    /**
+     * Count all posts and comments written on posts by an author.
+     *
+     * @return array{posts:int,comments:int}
+     */
+    public function statsByAuthor(string $nick): array
+    {
+        $row = $this->connection->selectOne(
+            sprintf(
+                'SELECT (SELECT COUNT(*) FROM `%s` WHERE `author` = ?) AS posts, '
+                . '(SELECT COUNT(*) FROM `%s` WHERE `author` = ?) AS comments',
+                self::TABLE_POST,
+                self::TABLE_COMMENT
+            ),
+            [$nick, $nick]
+        );
+
+        return [
+            'posts' => (int) ($row['posts'] ?? 0),
+            'comments' => (int) ($row['comments'] ?? 0),
+        ];
     }
 
     /**
